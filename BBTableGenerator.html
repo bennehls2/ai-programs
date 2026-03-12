@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Big Brother Wiki Table Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f4;
+            padding: 20px;
+        }
+
+        h1, h2, h3 {
+            text-align: center;
+            color: #333;
+        }
+
+        /* --- Input Interface Styling --- */
+        #game-controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            max-width: 800px;
+            margin: 0 auto 30px auto;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 5px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        select, input[type="number"], input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box; 
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .btn-success {
+            background-color: #28a745;
+        }
+        .btn-success:hover {
+            background-color: #218838;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        /* --- Table Styling --- */
+        .table-container {
+            overflow-x: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            text-align: center; /* Centers the table within the container */
+        }
+
+        table {
+            border-collapse: collapse;
+            font-size: 13px;
+            margin: 0 auto; /* Centers the table */
+            
+            /* KEY CHANGE: Auto width prevents stretching */
+            width: auto; 
+            table-layout: auto; 
+        }
+
+        th, td {
+            border: 1px solid #a2a9b1;
+            padding: 5px 8px;
+            text-align: center; 
+            vertical-align: middle;
+            color: #202122;
+            
+            /* Text Wrapping Logic to fit longest word */
+            white-space: normal; 
+            word-wrap: break-word; 
+            max-width: 110px; /* Restrict max width to force wrapping */
+            line-height: 1.2;
+        }
+
+        /* Specific Header Column Styling */
+        .header-col {
+            background-color: #eaecf0;
+            font-weight: bold;
+            text-align: center; 
+            width: auto;
+            white-space: nowrap; 
+            max-width: none;
+        }
+
+        .week-header {
+            background-color: #eaecf0;
+            font-weight: bold;
+        }
+
+        /* --- Borders --- */
+        #row-header-noms-final th, 
+        #row-header-noms-final td {
+            border-bottom: 3px solid black;
+        }
+
+        #row-footer-evicted th,
+        #row-footer-evicted td {
+            border-top: 3px solid black;
+        }
+
+        /* --- Colors & Styles --- */
+        .bg-hoh { background-color: #98fb98; }
+        .bg-nominee { background-color: #add8e6; }
+        .bg-evicted-bar { background-color: #ffcccc; }
+        .bg-winner { background-color: #ffd700; }
+        .bg-runnerup { background-color: #c0c0c0; }
+        .bg-jury { background-color: white; }
+
+        /* Continuous Dark Grey Block Logic */
+        .bg-dark-grey { 
+            background-color: #888888; 
+            border-top-color: #888888;
+            border-bottom-color: #888888;
+            border-left-color: #a2a9b1;
+            border-right-color: #a2a9b1;
+        }
+
+        #row-header-noms-final .bg-dark-grey {
+            border-bottom: 3px solid black;
+        }
+
+        thead th:first-child,
+        tbody th:first-child,
+        tfoot th:first-child {
+            background-color: #eaecf0;
+            font-weight: bold;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>Big Brother Wiki Table Generator</h1>
+
+    <div id="game-controls">
+        <div id="phase-setup">
+            <h2>Season Setup</h2>
+            <div class="input-group">
+                <label>Number of Contestants (10-30):</label>
+                <input type="number" id="num-players" min="10" max="30" value="16">
+            </div>
+            <button onclick="initNamesInputs()">Next: Enter Names</button>
+        </div>
+
+        <div id="phase-names" class="hidden">
+            <h2>Enter Contestant Names</h2>
+            <div id="names-container"></div>
+            <button onclick="startGame()">Start Season</button>
+        </div>
+
+        <div id="phase-game" class="hidden">
+            <h2 id="week-display">Week 1</h2>
+            <p id="status-display" style="text-align:center; color:#666;"></p>
+
+            <div id="step-events">
+                <div class="input-group">
+                    <label>Head of Household:</label>
+                    <select id="sel-hoh" onchange="updateNomOptions()"></select>
+                </div>
+                
+                <div id="regular-week-events">
+                    <div class="input-group">
+                        <label>Nominations (Initial):</label>
+                        <div style="display:flex; gap:10px;">
+                            <select id="sel-init-1"></select>
+                            <select id="sel-init-2"></select>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label>Veto Winner:</label>
+                        <select id="sel-veto"></select>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>Nominations (Final):</label>
+                    <div style="display:flex; gap:10px;">
+                        <select id="sel-final-1"></select>
+                        <select id="sel-final-2"></select>
+                    </div>
+                </div>
+
+                <div class="input-group" id="jury-toggle-container">
+                    <label>
+                        <input type="checkbox" id="chk-jury"> Jury Phase Begins Now?
+                    </label>
+                </div>
+
+                <button onclick="goToVoting()">Proceed to Voting</button>
+            </div>
+
+            <div id="step-voting" class="hidden">
+                <h3>Cast Votes</h3>
+                <div id="voting-container"></div>
+                <button onclick="finalizeWeek()">Evict Player</button>
+            </div>
+
+            <div id="step-finale" class="hidden">
+                <h2>The Finale</h2>
+                <div id="jury-vote-container"></div>
+                <button onclick="finalizeSeason()">Crown Winner</button>
+            </div>
+        </div>
+
+        <div id="phase-end" class="hidden">
+            <h2>Season Complete</h2>
+            <p>The table is ready below.</p>
+            <button class="btn-success" onclick="exportJPEG()">Download Table as JPEG</button>
+        </div>
+    </div>
+
+    <div class="table-container" id="table-to-print">
+        <table id="bb-table">
+            <thead>
+                <tr id="row-header-weeks">
+                    <th class="header-col">Week</th>
+                </tr>
+                <tr id="row-header-hoh">
+                    <th class="header-col">Head of<br>Household</th>
+                </tr>
+                <tr id="row-header-noms-init">
+                    <th class="header-col">Nominations<br>(Initial)</th>
+                </tr>
+                <tr id="row-header-veto">
+                    <th class="header-col">Veto Winner</th>
+                </tr>
+                <tr id="row-header-noms-final">
+                    <th class="header-col">Nominations<br>(Final)</th>
+                </tr>
+            </thead>
+            <tbody id="table-body">
+                </tbody>
+            <tfoot>
+                <tr id="row-footer-evicted">
+                    <th class="header-col">Evicted</th>
+                </tr>
+                <tr id="row-footer-votes">
+                    <th class="header-col">Vote</th>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <script>
+        // --- State Management ---
+        let players = []; 
+        let weekCount = 1;
+        let isJury = false;
+        let gameData = [];
+
+        const getActive = () => players.filter(p => p.status === 'active');
+
+        // --- Setup Functions ---
+        function initNamesInputs() {
+            const count = document.getElementById('num-players').value;
+            const container = document.getElementById('names-container');
+            container.innerHTML = '';
+            for(let i=1; i<=count; i++) {
+                container.innerHTML += `<div style="margin-bottom:5px;"><input type="text" id="pname-${i}" value="Player ${i}" placeholder="Name ${i}"></div>`;
+            }
+            document.getElementById('phase-setup').classList.add('hidden');
+            document.getElementById('phase-names').classList.remove('hidden');
+        }
+
+        function startGame() {
+            const inputs = document.querySelectorAll('#names-container input');
+            players = Array.from(inputs).map(inp => ({
+                name: inp.value,
+                status: 'active', 
+                evictionWeek: null,
+                score: 0 
+            }));
+
+            const tbody = document.getElementById('table-body');
+            players.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.id = `row-${p.name.replace(/\s+/g, '')}`; 
+                tr.innerHTML = `<th class="header-col">${p.name}</th>`;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('phase-names').classList.add('hidden');
+            document.getElementById('phase-game').classList.remove('hidden');
+            setupWeekUI();
+        }
+
+        // --- Weekly UI Logic ---
+        function populateSelect(id, opts, exclude=[]) {
+            const sel = document.getElementById(id);
+            sel.innerHTML = '';
+            opts.forEach(p => {
+                if(!exclude.includes(p.name)) {
+                    const opt = document.createElement('option');
+                    opt.value = p.name;
+                    opt.innerText = p.name;
+                    sel.appendChild(opt);
+                }
+            });
+        }
+
+        function setupWeekUI() {
+            const active = getActive();
+            if(active.length === 2) {
+                setupFinaleUI();
+                return;
+            }
+
+            document.getElementById('week-display').innerText = `Week ${weekCount}`;
+            document.getElementById('status-display').innerText = `${active.length} Houseguests Remaining`;
+            document.getElementById('step-events').classList.remove('hidden');
+            document.getElementById('step-voting').classList.add('hidden');
+
+            populateSelect('sel-hoh', active);
+            
+            if(active.length === 3) {
+                document.getElementById('regular-week-events').classList.add('hidden');
+            } else {
+                document.getElementById('regular-week-events').classList.remove('hidden');
+                populateSelect('sel-veto', active); 
+            }
+            updateNomOptions();
+
+            if(isJury || active.length <= 3) {
+                document.getElementById('jury-toggle-container').classList.add('hidden');
+            }
+        }
+
+        function updateNomOptions() {
+            const hoh = document.getElementById('sel-hoh').value;
+            const active = getActive();
+            const nominees = active.filter(p => p.name !== hoh);
+            const isF3 = active.length === 3;
+            
+            if(!isF3) {
+                populateSelect('sel-init-1', nominees);
+                populateSelect('sel-init-2', nominees);
+                populateSelect('sel-veto', active);
+            }
+            populateSelect('sel-final-1', nominees);
+            populateSelect('sel-final-2', nominees);
+        }
+
+        function goToVoting() {
+            const active = getActive();
+            const hoh = document.getElementById('sel-hoh').value;
+            let nom1, nom2, veto, init1, init2;
+
+            if(active.length === 3) {
+                const others = active.filter(p => p.name !== hoh);
+                nom1 = others[0].name;
+                nom2 = others[1].name;
+                veto = null; init1 = null; init2 = null;
+            } else {
+                nom1 = document.getElementById('sel-final-1').value;
+                nom2 = document.getElementById('sel-final-2').value;
+                veto = document.getElementById('sel-veto').value;
+                init1 = document.getElementById('sel-init-1').value;
+                init2 = document.getElementById('sel-init-2').value;
+            }
+
+            if(nom1 === nom2) { alert("Final Nominees must be different."); return; }
+
+            window.tempWeek = { hoh, nom1, nom2, veto, init1, init2 };
+
+            if(document.getElementById('chk-jury').checked) isJury = true;
+
+            const container = document.getElementById('voting-container');
+            container.innerHTML = '';
+            
+            let voters = [];
+            if(active.length === 3) {
+                voters = [players.find(p => p.name === hoh)];
+                container.innerHTML = `<p><strong>Final 3:</strong> The HoH (${hoh}) casts the sole vote to evict.</p>`;
+            } else {
+                voters = active.filter(p => p.name !== hoh && p.name !== nom1 && p.name !== nom2);
+            }
+
+            voters.forEach(v => {
+                container.innerHTML += `
+                    <div class="input-group">
+                        <label>${v.name} votes to evict:</label>
+                        <select id="vote-${v.name.replace(/\s+/g,'')}">
+                            <option value="${nom1}">${nom1}</option>
+                            <option value="${nom2}">${nom2}</option>
+                        </select>
+                    </div>
+                `;
+            });
+
+            document.getElementById('step-events').classList.add('hidden');
+            document.getElementById('step-voting').classList.remove('hidden');
+        }
+
+        function finalizeWeek() {
+            const data = window.tempWeek;
+            const active = getActive();
+            let voters;
+
+            if(active.length === 3) voters = [players.find(p => p.name === data.hoh)];
+            else voters = active.filter(p => p.name !== data.hoh && p.name !== data.nom1 && p.name !== data.nom2);
+
+            let votes1 = 0, votes2 = 0;
+            let voteMap = {};
+
+            voters.forEach(v => {
+                const val = document.getElementById(`vote-${v.name.replace(/\s+/g,'')}`).value;
+                voteMap[v.name] = val;
+                if(val === data.nom1) votes1++; else votes2++;
+            });
+
+            let evicted = null;
+            let tieBreakCast = null;
+
+            if(votes1 > votes2) evicted = data.nom1;
+            else if(votes2 > votes1) evicted = data.nom2;
+            else {
+                let target = prompt(`Tie! ${votes1}-${votes2}. HoH ${data.hoh}, enter name to evict (${data.nom1} or ${data.nom2}):`);
+                if(target !== data.nom1 && target !== data.nom2) target = data.nom1; 
+                evicted = target;
+                tieBreakCast = target;
+            }
+
+            const pEvicted = players.find(p => p.name === evicted);
+            pEvicted.status = isJury ? 'jury' : 'evicted';
+            pEvicted.evictionWeek = weekCount;
+            pEvicted.score = weekCount; 
+            players.filter(p => p.status === 'active').forEach(p => p.score = 100 + weekCount);
+
+            const weekResult = {
+                type: 'regular',
+                id: weekCount,
+                hoh: data.hoh,
+                init: [data.init1, data.init2],
+                veto: data.veto,
+                final: [data.nom1, data.nom2],
+                evicted: evicted,
+                tiebreaker: tieBreakCast,
+                votes: voteMap,
+                voteCountStr: `${votes1 + votes2 + (tieBreakCast?1:0)}`,
+                evictVotes: (evicted === data.nom1 ? votes1 : votes2) 
+            };
+
+            gameData.push(weekResult);
+            renderColumn(weekResult);
+            sortRows();
+
+            weekCount++;
+            setupWeekUI();
+        }
+
+        // --- Finale Logic ---
+        function setupFinaleUI() {
+            document.getElementById('step-events').classList.add('hidden');
+            document.getElementById('step-voting').classList.add('hidden');
+            document.getElementById('step-finale').classList.remove('hidden');
+            document.getElementById('week-display').innerText = "Finale";
+            document.getElementById('status-display').innerText = "Jury Vote";
+
+            const final2 = getActive();
+            const jury = players.filter(p => p.status === 'jury');
+            const con = document.getElementById('jury-vote-container');
+            con.innerHTML = '';
+
+            if(jury.length === 0) con.innerHTML = "<p>No Jurors found.</p>";
+
+            jury.forEach(j => {
+                con.innerHTML += `
+                    <div class="input-group">
+                        <label>${j.name} votes for WINNER:</label>
+                        <select id="jvote-${j.name.replace(/\s+/g,'')}">
+                            <option value="${final2[0].name}">${final2[0].name}</option>
+                            <option value="${final2[1].name}">${final2[1].name}</option>
+                        </select>
+                    </div>
+                `;
+            });
+        }
+
+        function finalizeSeason() {
+            const final2 = getActive();
+            const p1 = final2[0];
+            const p2 = final2[1];
+            
+            let v1 = 0, v2 = 0;
+            const juryVotes = {};
+            
+            const selects = document.querySelectorAll('#jury-vote-container select');
+            selects.forEach(sel => {
+                const jName = sel.id.replace('jvote-',''); 
+                const val = sel.value;
+                const juror = players.find(p => p.name.replace(/\s+/g,'') === jName);
+                if(juror) juryVotes[juror.name] = val;
+
+                if(val === p1.name) v1++; else v2++;
+            });
+
+            let winner, runner;
+            if(v1 > v2) { winner = p1; runner = p2; }
+            else { winner = p2; runner = p1; }
+
+            winner.status = 'Winner'; winner.score = 1000;
+            runner.status = 'Runner-Up'; runner.score = 500;
+
+            const finaleResult = {
+                type: 'finale',
+                winner: winner.name,
+                runner: runner.name,
+                juryVotes: juryVotes,
+                countStr: `${winner.name}<br>${Math.max(v1,v2)} of ${v1+v2} votes to win`
+            };
+
+            renderColumn(finaleResult);
+            sortRows();
+
+            document.getElementById('phase-game').classList.add('hidden');
+            document.getElementById('phase-end').classList.remove('hidden');
+        }
+
+
+        // --- Table Rendering ---
+
+        // Helper to format nominees alphabetically on two lines
+        function formatNoms(nomsArray) {
+            if (!nomsArray || !nomsArray[0]) return '';
+            // Clone and Sort alphabetically
+            const sorted = [...nomsArray].sort();
+            return `${sorted[0]}<br>${sorted[1]}`;
+        }
+
+        function renderColumn(data) {
+            const isFinale = data.type === 'finale';
+            // F3 Check: If not finale, but init noms are null
+            const isF3 = !isFinale && (data.init[0] === null);
+
+            // 1. Headers
+            const headRow = document.getElementById('row-header-weeks');
+            headRow.insertAdjacentHTML('beforeend', `<th class="week-header">${isFinale ? 'Finale' : 'Week '+data.id}</th>`);
+
+            // 2. Info Rows
+            // HoH Row
+            addCell('row-header-hoh', isFinale ? '' : data.hoh, isFinale ? 'bg-dark-grey' : ''); 
+            
+            // Init Noms
+            let initTxt = (isFinale || isF3) ? '' : formatNoms(data.init);
+            let initClass = (isFinale || isF3) ? 'bg-dark-grey' : '';
+            addCell('row-header-noms-init', initTxt, initClass);
+
+            // Veto
+            let vetoTxt = (isFinale || isF3) ? '' : data.veto;
+            let vetoClass = (isFinale || isF3) ? 'bg-dark-grey' : '';
+            addCell('row-header-veto', vetoTxt, vetoClass);
+
+            // Final Noms
+            let finalTxt = isFinale ? '' : formatNoms(data.final);
+            let finalClass = isFinale ? 'bg-dark-grey' : '';
+            addCell('row-header-noms-final', finalTxt, finalClass);
+
+            // 3. Player Cells
+            players.forEach(p => {
+                const tr = document.getElementById(`row-${p.name.replace(/\s+/g,'')}`);
+                const td = document.createElement('td');
+
+                if (isFinale) {
+                    if(p.name === data.winner) { td.className='bg-winner'; td.innerText='Winner'; }
+                    else if(p.name === data.runner) { td.className='bg-runnerup'; td.innerText='Runner-Up'; }
+                    else if(data.juryVotes[p.name]) { td.className='bg-jury'; td.innerText=data.juryVotes[p.name]; }
+                    else {
+                        // Pre-juror
+                        handleRedBar(tr, p, weekCount, td); 
+                    }
+                } else {
+                    // Regular Week
+                    if (p.status === 'active' || (p.evictionWeek === weekCount)) {
+                        // Active or just evicted
+                        if(p.name === data.hoh) {
+                            td.className = 'bg-hoh';
+                            td.innerText = data.tiebreaker ? data.tiebreaker : "Head of Household";
+                        } 
+                        else if(data.final.includes(p.name)) {
+                            td.className = 'bg-nominee';
+                            td.innerText = "Nominated";
+                        } 
+                        else if(data.votes[p.name]) {
+                            td.innerText = data.votes[p.name];
+                        } 
+                        else {
+                            td.innerText = "";
+                        }
+                    } else {
+                        // Previously evicted
+                        handleRedBar(tr, p, weekCount, td);
+                    }
+                }
+                
+                if(!td.getAttribute('data-skip')) {
+                    tr.appendChild(td);
+                }
+            });
+
+            // 4. Footer
+            const footEvicted = document.getElementById('row-footer-evicted');
+            const footVote = document.getElementById('row-footer-votes');
+            
+            if(isFinale) {
+                // Finale Footer: Gold for Winner
+                footEvicted.insertAdjacentHTML('beforeend', `<td class="bg-winner">Winner</td>`);
+                footVote.insertAdjacentHTML('beforeend', `<td class="bg-winner">${data.countStr}</td>`);
+            } else {
+                // Regular Footer: Red cells
+                footEvicted.insertAdjacentHTML('beforeend', `<td class="bg-evicted-bar">${data.evicted}</td>`);
+                const voteTxt = `${data.evictVotes} of ${data.voteCountStr} votes to evict`;
+                footVote.insertAdjacentHTML('beforeend', `<td class="bg-evicted-bar">${voteTxt}</td>`);
+            }
+        }
+
+        function addCell(rowId, text, className) {
+            const tr = document.getElementById(rowId);
+            const td = document.createElement('td');
+            td.innerHTML = text; // InnerHTML used for <br> breaks
+            if(className) td.className = className;
+            tr.appendChild(td);
+        }
+
+        function handleRedBar(tr, p, currentWk, newTd) {
+            let cWeekVal = (typeof currentWk === 'string') ? 999 : currentWk; 
+
+            if(p.evictionWeek && cWeekVal === p.evictionWeek + 1) {
+                newTd.className = 'bg-evicted-bar';
+                newTd.innerHTML = `Evicted<br>(Week ${p.evictionWeek})`;
+            } else if (p.evictionWeek && cWeekVal > p.evictionWeek + 1) {
+                const lastCell = tr.lastElementChild;
+                if(lastCell) {
+                    const currentSpan = parseInt(lastCell.getAttribute('colspan') || 1);
+                    lastCell.setAttribute('colspan', currentSpan + 1);
+                    newTd.setAttribute('data-skip', 'true');
+                }
+            }
+        }
+
+        function sortRows() {
+            const tbody = document.getElementById('table-body');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+
+            rows.sort((rowA, rowB) => {
+                const nameA = rowA.id.replace('row-', ''); 
+                const nameB = rowB.id.replace('row-', '');
+                const pA = players.find(p => p.name.replace(/\s+/g,'') === nameA);
+                const pB = players.find(p => p.name.replace(/\s+/g,'') === nameB);
+                return pB.score - pA.score;
+            });
+
+            rows.forEach(r => tbody.appendChild(r));
+        }
+
+        // --- JPEG Export ---
+        function exportJPEG() {
+            const element = document.getElementById('table-to-print');
+            html2canvas(element, {
+                backgroundColor: "#ffffff",
+                scale: 2 // Higher quality
+            }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = 'BigBrotherSeason.jpg';
+                link.href = canvas.toDataURL('image/jpeg', 0.9);
+                link.click();
+            });
+        }
+
+    </script>
+</body>
+</html>
