@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lucky Panel Guided Tracker</title>
+    <style>
+        :root { --gold: #f0a500; --bg: #1a1a2e; --card: #16213e; --accent: #533483; --slime: #a5a5a5; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        
+        .controls { background: #0f3460; padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 1px solid var(--gold); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
+        .grid { display: grid; gap: 8px; background: #000; padding: 10px; border-radius: 8px; border: 2px solid #333; margin-top: 10px; transition: 0.3s; }
+        
+        .card { width: 50px; height: 65px; background: var(--card); border: 2px solid var(--accent); border-radius: 4px; 
+                display: flex; align-items: center; justify-content: center; cursor: pointer; font-weight: bold; font-size: 1.2rem; transition: 0.1s; position: relative; }
+        .card:hover { border-color: var(--gold); background: #1e2a4a; }
+        .card.active { border-color: var(--gold); box-shadow: 0 0 10px var(--gold); transform: scale(1.05); background: #1e2a4a; z-index: 2; }
+        
+        .card.imp { color: #ff4d4d; }
+        .card.star { color: #ffff00; }
+        .card.slime { color: var(--slime); }
+
+        /* Buttons */
+        button { padding: 12px 18px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; background: var(--accent); }
+        button:disabled { opacity: 0.3; cursor: not-allowed; }
+        .btn-swap-on { background: #28a745 !important; }
+        .btn-swap-off { background: var(--gold) !important; color: black; }
+        .btn-danger { background: #e94560; }
+        .btn-confirm { background: #28a745; }
+        .hidden { display: none !important; }
+
+        #instruction { background: rgba(0,0,0,0.3); padding: 10px 20px; border-radius: 20px; color: var(--gold); font-weight: bold; margin-bottom: 20px; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <h1 style="color: var(--gold); margin-bottom: 5px;">Lucky Panel Tracker</h1>
+    <div id="instruction">Select your casino level to begin.</div>
+
+    <div id="setup-row" class="controls">
+        <button onclick="selectLevel(1)">Level 1</button>
+        <button onclick="selectLevel(2)">Level 2</button>
+        <button onclick="selectLevel(3)">Level 3</button>
+        <button onclick="selectLevel(4)">Level 4</button>
+    </div>
+
+    <div id="special-choice" class="controls hidden">
+        <span>Is the 2nd symbol an:</span>
+        <button onclick="setSpecialType('👿')">👿 Imp</button>
+        <button onclick="setSpecialType('🩶')">🩶 Metal Slime</button>
+    </div>
+
+    <div id="action-bar" class="controls hidden">
+        <button id="swapBtn" class="btn-swap-off" onclick="toggleSwapMode()">SWAP MODE: OFF</button>
+        <button id="undoBtn" onclick="undoSwap()" disabled>Undo</button>
+        <button id="restartBtn" class="btn-danger" onclick="restartBoard()">Restart</button>
+        <button id="nextBtn" class="btn-confirm hidden" onclick="goNextLevel()">Next Level</button>
+        <button class="btn-danger" onclick="hardReset()">New Board</button>
+    </div>
+
+    <div id="grid" class="grid"></div>
+
+    <script>
+        let currentLevel = 1;
+        let rows = 0, cols = 0, boardState = [], originalBoard = [], swapHistory = [], selectedIndices = [];
+        let isLocked = false, isSwapMode = false;
+        
+        // Guided Setup Logic
+        let setupPhase = "OFF"; // STAR, CHOICE, SPECIAL, PAIRS, READY
+        let specialSymbol = '👿';
+        let currentPairChar = 65; // ASCII 'A'
+
+        const levels = { 1: {r:3, c:4}, 2: {r:4, c:4}, 3: {r:4, c:5}, 4: {r:4, c:6} };
+
+        function updateInstruction(text) {
+            document.getElementById('instruction').innerText = text;
+        }
+
+        function selectLevel(lvl) {
+            currentLevel = lvl;
+            rows = levels[lvl].r;
+            cols = levels[lvl].c;
+            boardState = Array(rows * cols).fill("");
+            
+            document.getElementById('setup-row').classList.add('hidden');
+            setupPhase = "STAR";
+            updateInstruction("⭐ Assignment: Click the square where the STAR is.");
+            render();
+        }
+
+        function setSpecialType(sym) {
+            specialSymbol = sym;
+            document.getElementById('special-choice').classList.add('hidden');
+            setupPhase = "SPECIAL";
+            updateInstruction(`${sym} Assignment: Click the square for the ${sym === '👿' ? 'Imp' : 'Metal Slime'}.`);
+        }
+
+        function handleCardClick(i) {
+            if (isLocked) {
+                if (isSwapMode) handleSwapClick(i);
+                return;
+            }
+
+            if (boardState[i] !== "") return; // Can't overwrite during guided setup
+
+            if (setupPhase === "STAR") {
+                boardState[i] = "⭐";
+                setupPhase = "CHOICE";
+                document.getElementById('special-choice').classList.remove('hidden');
+                updateInstruction("Waiting for Symbol Choice...");
+            } 
+            else if (setupPhase === "SPECIAL") {
+                boardState[i] = specialSymbol;
+                setupPhase = "PAIRS";
+                updatePairInstruction();
+            } 
+            else if (setupPhase === "PAIRS") {
+                if (selectedIndices.includes(i)) return;
+                selectedIndices.push(i);
+                
+                if (selectedIndices.length === 2) {
+                    const char = String.fromCharCode(currentPairChar);
+                    boardState[selectedIndices[0]] = char;
+                    boardState[selectedIndices[1]] = char;
+                    selectedIndices = [];
+                    currentPairChar++;
+                    
+                    if (!boardState.includes("")) {
+                        lockBoard();
+                    } else {
+                        updatePairInstruction();
+                    }
+                }
+            }
+            render();
+        }
+
+        function updatePairInstruction() {
+            const char = String.fromCharCode(currentPairChar);
+            updateInstruction(`Pairing Phase: Select 2 boxes for Pair [ ${char} ]`);
+        }
+
+        function handleSwapClick(i) {
+            if (selectedIndices.includes(i)) {
+                selectedIndices = [];
+            } else {
+                selectedIndices.push(i);
+            }
+
+            if (selectedIndices.length === 2) {
+                swapHistory.push([...boardState]);
+                let temp = boardState[selectedIndices[0]];
+                boardState[selectedIndices[0]] = boardState[selectedIndices[1]];
+                boardState[selectedIndices[1]] = temp;
+                selectedIndices = [];
+                document.getElementById('undoBtn').disabled = false;
+                toggleSwapMode(); 
+            }
+            render();
+        }
+
+        function render() {
+            const grid = document.getElementById('grid');
+            grid.style.gridTemplateColumns = `repeat(${cols}, 50px)`;
+            grid.innerHTML = '';
+
+            boardState.forEach((val, i) => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                if (val === '👿') card.classList.add('imp');
+                else if (val === '⭐') card.classList.add('star');
+                else if (val === '🩶') card.classList.add('slime');
+                
+                card.innerText = val || "?";
+                if (!val) card.style.opacity = "0.4";
+                if (selectedIndices.includes(i)) card.classList.add('active');
+                
+                card.onclick = () => handleCardClick(i);
+                grid.appendChild(card);
+            });
+        }
+
+        function lockBoard() {
+            isLocked = true;
+            setupPhase = "READY";
+            originalBoard = [...boardState];
+            document.getElementById('action-bar').classList.remove('hidden');
+            if (currentLevel < 4) document.getElementById('nextBtn').classList.remove('hidden');
+            updateInstruction("Board Locked! Ready for the Shuffle.");
+            render();
+        }
+
+        function toggleSwapMode() {
+            isSwapMode = !isSwapMode;
+            selectedIndices = [];
+            const btn = document.getElementById('swapBtn');
+            btn.innerText = isSwapMode ? "SWAP MODE: ON" : "SWAP MODE: OFF";
+            btn.className = isSwapMode ? "btn-swap-on" : "btn-swap-off";
+            render();
+        }
+
+        function undoSwap() {
+            if (swapHistory.length > 0) {
+                boardState = swapHistory.pop();
+                document.getElementById('undoBtn').disabled = swapHistory.length === 0;
+                render();
+            }
+        }
+
+        function restartBoard() {
+            if (confirm("Revert to the original layout?")) {
+                boardState = [...originalBoard];
+                swapHistory = [];
+                document.getElementById('undoBtn').disabled = true;
+                isSwapMode = false;
+                toggleSwapMode(); toggleSwapMode(); // Reset visual state
+                render();
+            }
+        }
+
+        function hardReset() {
+            isLocked = false;
+            isSwapMode = false;
+            boardState = [];
+            swapHistory = [];
+            selectedIndices = [];
+            currentPairChar = 65;
+            document.getElementById('grid').innerHTML = '';
+            document.getElementById('setup-row').classList.remove('hidden');
+            document.getElementById('action-bar').classList.add('hidden');
+            document.getElementById('nextBtn').classList.add('hidden');
+            document.getElementById('special-choice').classList.add('hidden');
+            updateInstruction("Select your casino level to begin.");
+        }
+
+        function goNextLevel() {
+            if (currentLevel < 4) {
+                const next = currentLevel + 1;
+                hardReset();
+                selectLevel(next);
+            }
+        }
+    </script>
+</body>
+</html>
