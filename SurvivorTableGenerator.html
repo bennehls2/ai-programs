@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Survivor Wikipedia Table Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f4f4f4; }
+        h1, h2 { color: #333; }
+        
+        .container { display: flex; gap: 20px; flex-direction: column; }
+        @media(min-width: 900px) { .container { flex-direction: row; } }
+        
+        .controls { flex: 1; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .display { flex: 2; overflow-x: auto; background: white; padding: 20px; border-radius: 8px; }
+
+        /* Wikipedia Table Styling */
+        table.wikitable {
+            background-color: #f8f9fa;
+            color: #202122;
+            margin: 1em 0;
+            border: 1px solid #a2a9b1;
+            border-collapse: collapse;
+            font-size: 0.85em;
+            width: auto; 
+        }
+        
+        table.wikitable th, table.wikitable td {
+            border: 1px solid #a2a9b1;
+            padding: 3px 6px;
+            text-align: center;
+            white-space: nowrap; 
+        }
+
+        table.wikitable th { background-color: #eaecf0; font-weight: bold; }
+        
+        /* Castaway Column */
+        .castaway-col {
+            text-align: left !important;
+            white-space: nowrap;
+            width: 1%; 
+            font-weight: bold;
+            background: #f2f2f2;
+        }
+        
+        /* Tribe Colors */
+        .tribe-Red { background-color: #ff9999 !important; } 
+        .tribe-Blue { background-color: #99ccff !important; } 
+        .tribe-Yellow { background-color: #ffffcc !important; } 
+        .tribe-Green { background-color: #ccffcc !important; }
+        .tribe-Purple { background-color: #cc99ff !important; } 
+        .tribe-Orange { background-color: #ffcc66 !important; } 
+        .tribe-Black { background-color: #444 !important; color: white !important; }
+        
+        /* Special Cells */
+        .spacer { background: transparent !important; border: none !important; }
+        .white-cell { background-color: #ffffff !important; border: 1px solid #a2a9b1; }
+        
+        /* Inactive/No Vote Cell (Light Gray to contrast with Silver) */
+        .gray-cell { background-color: #e6e6e6 !important; color: #777 !important; font-style: italic; }
+        
+        /* Finalist Medal Colors */
+        .finalist-gold { background-color: #FFD700 !important; font-weight: bold; color: #000 !important; } 
+        .finalist-silver { background-color: #C0C0C0 !important; font-weight: bold; color: #000 !important; } 
+        .finalist-bronze { background-color: #CD7F32 !important; font-weight: bold; color: #fff !important; } 
+
+        /* Inputs */
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; }
+        input, select, textarea { width: 100%; padding: 8px; margin-bottom: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { background: #3366cc; color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; width: 100%; margin-bottom: 5px; }
+        button:hover { background: #2852a3; }
+        button.secondary { background: #666; }
+        button.danger { background: #cc3333; }
+        button.success { background: #28a745; margin-top: 20px; }
+        
+        .hidden { display: none; }
+        .vote-input { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+    </style>
+</head>
+<body>
+
+    <h1>Survivor Table Generator</h1>
+
+    <div class="container">
+        <div class="controls" id="controlPanel">
+            
+            <div id="setupPhase">
+                <h2>Game Setup</h2>
+                <div class="form-group">
+                    <label>Number of Tribes (2-4)</label>
+                    <input type="number" id="numTribes" min="2" max="4" value="2">
+                </div>
+                <button onclick="generateTribeInputs()">Next: Tribe Colors</button>
+            </div>
+
+            <div id="tribeDetails" class="hidden">
+                <h2>Tribe Details</h2>
+                <div id="tribeInputsContainer"></div>
+                <button onclick="startGame()">Start Game</button>
+            </div>
+
+            <div id="gameLoop" class="hidden">
+                <h2 id="currentStatus">Episode 1</h2>
+                
+                <div class="form-group">
+                    <button class="secondary" id="swapBtn" onclick="triggerSwapStart()">Trigger Tribe Swap</button>
+                    <button class="secondary" id="mergeBtn" onclick="triggerMerge()">Merge Tribes</button>
+                    <button class="secondary" id="juryBtn" onclick="toggleJury()">Start Jury Phase</button>
+                </div>
+                <hr>
+
+                <div id="actionArea">
+                    <h3 id="actionHeader">Episode Actions</h3>
+                    
+                    <div id="standardVoteGroup">
+                        <div class="form-group" id="immunitySelect">
+                            <label>Which Tribe(s) Lost Immunity?</label>
+                            <div id="losingTribeCheckboxes"></div>
+                        </div>
+                        <button onclick="setupVoting()">Proceed to Vote</button>
+                    </div>
+                    
+                    <div id="swapControlGroup" class="hidden"></div>
+
+                    <div id="endGameGroup" class="hidden">
+                        <p><strong>Game Reached Final Phase.</strong></p>
+                        <button class="danger" onclick="setupFinalVote()">End Game & Proceed to Final Vote</button>
+                    </div>
+                </div>
+
+                <div id="votingArea" class="hidden">
+                    <h3 id="votingHeader">Tribal Council</h3>
+                    <div id="voteInputs"></div>
+                    <button onclick="calculateResults()">Calculate Results</button>
+                </div>
+
+                <div id="resultArea" class="hidden">
+                    <h3>Results</h3>
+                    <p id="tallyDisplay" style="font-weight:bold;"></p>
+                    
+                    <div id="eliminationControls">
+                        <label>Confirm Eliminated Player:</label>
+                        <select id="confirmEliminated"></select>
+                        <div style="display:flex; gap:5px; margin-top:10px;">
+                            <button class="secondary" onclick="editVotes()">Go Back & Edit Votes</button>
+                            <button class="danger" onclick="finalizeEpisode()">Finalize Episode</button>
+                        </div>
+                    </div>
+
+                    <div id="tieControls" class="hidden">
+                        <p style="color:red; font-weight:bold;">A Tie has occurred!</p>
+                        <div style="display:flex; gap:5px; margin-top:10px;">
+                            <button class="secondary" onclick="editVotes()">Go Back & Edit Votes</button>
+                            <button class="danger" onclick="triggerRevote()">Proceed to Revote</button>
+                        </div>
+                    </div>
+                    
+                    <div id="f4FireControls" class="hidden">
+                        <p style="color:red; font-weight:bold;">Final 4 Tie! Fire Making Required.</p>
+                        <div style="display:flex; gap:5px; margin-top:10px;">
+                             <button class="secondary" onclick="editVotes()">Go Back & Edit Votes</button>
+                             <button class="danger" onclick="triggerF4Fire()">Proceed to Fire Making</button>
+                        </div>
+                    </div>
+
+                    <div id="rockControls" class="hidden">
+                        <p style="color:red; font-weight:bold;">Deadlock! Rocks Required.</p>
+                        <div style="display:flex; gap:5px; margin-top:10px;">
+                            <button class="secondary" onclick="editVotes()">Go Back & Edit Votes</button>
+                            <button class="danger" onclick="triggerRocks()">Proceed to Rock Draw</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="fireMakingArea" class="hidden">
+                    <h3>Fire Making Challenge</h3>
+                    <p>Assign Results:</p>
+                    <div id="fireInputs"></div>
+                    <button class="danger" onclick="finalizeFire()">Finalize Challenge</button>
+                </div>
+                
+                <div id="rockDrawArea" class="hidden">
+                    <h3>Rock Draw Protocol</h3>
+                    <p>Assign status for players at Tribal:</p>
+                    <div id="rockInputs"></div>
+                    <button class="danger" onclick="finalizeRocks()">Finalize Rock Draw</button>
+                </div>
+
+                <div id="finalVoteArea" class="hidden">
+                    <h3>Final Tribal Council</h3>
+                    <div id="jurorVoteInputs"></div>
+                    <button onclick="calculateWinner()">Reveal Winner</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="display" id="tableContainer">
+            <h2>Voting History</h2>
+            <div id="captureArea" style="background:white; padding:10px; display:inline-block;">
+                <table class="wikitable" id="survivorTable">
+                    <thead id="tableHeader"></thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+            <br>
+            <button class="success" onclick="exportToJpeg()">Save Table as JPEG</button>
+        </div>
+    </div>
+
+<script>
+    // --- State Management ---
+    const availableColors = ["Red", "Blue", "Yellow", "Green", "Purple", "Orange", "Black"];
+    
+    let gameState = {
+        episodeCount: 1,
+        eliminationOrder: 1, 
+        tribes: [], 
+        players: [], 
+        isMerged: false,
+        mergeColor: "",
+        juryStarted: false,
+        history: [], 
+        allTimeUsedColors: [], 
+        
+        currentPhase: 'normal', 
+        tiedPlayers: [],
+        currentVoters: [],
+        fireParticipants: [] 
+    };
+
+    // --- Setup Functions ---
+    function generateTribeInputs() {
+        const num = document.getElementById('numTribes').value;
+        const container = document.getElementById('tribeInputsContainer');
+        container.innerHTML = '';
+        
+        for(let i=0; i<num; i++) {
+            const defaultIndex = i % availableColors.length;
+            let colorOptions = availableColors.map((c, idx) => 
+                `<option value="${c}" ${idx === defaultIndex ? 'selected' : ''}>${c}</option>`
+            ).join('');
+
+            const div = document.createElement('div');
+            div.className = 'form-group';
+            div.innerHTML = `
+                <label>Tribe ${i+1} Color</label>
+                <select id="tribeColor${i}">${colorOptions}</select>
+                <label>Contestants (comma separated)</label>
+                <textarea id="tribePlayers${i}" rows="3" placeholder="Alice, Bob...">Player${i+1}A, Player${i+1}B, Player${i+1}C</textarea>
+            `;
+            container.appendChild(div);
+        }
+        document.getElementById('setupPhase').classList.add('hidden');
+        document.getElementById('tribeDetails').classList.remove('hidden');
+    }
+
+    function startGame() {
+        const num = document.getElementById('numTribes').value;
+        const maxRank = 1000; 
+        
+        const selectedColors = [];
+        for(let i=0; i<num; i++) {
+            selectedColors.push(document.getElementById(`tribeColor${i}`).value);
+        }
+        if (new Set(selectedColors).size !== selectedColors.length) {
+            alert("Each tribe must have a unique color.");
+            return;
+        }
+
+        for(let i=0; i<num; i++) {
+            const tColor = document.getElementById(`tribeColor${i}`).value;
+            const pList = document.getElementById(`tribePlayers${i}`).value.split(',').map(s => s.trim()).filter(s => s);
+            gameState.tribes.push({ name: tColor, id: i }); 
+            gameState.allTimeUsedColors.push(tColor);
+            
+            pList.forEach(p => {
+                gameState.players.push({
+                    name: p,
+                    originalTribe: tColor,
+                    currentTribe: i,
+                    status: 'active',
+                    rank: maxRank,
+                    history: []
+                });
+            });
+        }
+        document.getElementById('tribeDetails').classList.add('hidden');
+        document.getElementById('gameLoop').classList.remove('hidden');
+        renderTable();
+        resetEpisodeUI();
+    }
+
+    // --- Game Logic ---
+    function resetEpisodeUI() {
+        gameState.currentPhase = 'normal';
+        gameState.tiedPlayers = [];
+        gameState.currentVoters = [];
+        gameState.fireParticipants = [];
+
+        document.getElementById('actionArea').classList.remove('hidden');
+        document.getElementById('votingArea').classList.add('hidden');
+        document.getElementById('resultArea').classList.add('hidden');
+        document.getElementById('rockDrawArea').classList.add('hidden');
+        document.getElementById('fireMakingArea').classList.add('hidden');
+        document.getElementById('swapControlGroup').classList.add('hidden');
+        document.getElementById('currentStatus').innerText = `Episode ${gameState.episodeCount}`;
+        
+        const losingTribeContainer = document.getElementById('losingTribeCheckboxes');
+        losingTribeContainer.innerHTML = '';
+        
+        const activePlayers = gameState.players.filter(p => p.status === 'active').length;
+
+        if (activePlayers <= 2) {
+            document.getElementById('standardVoteGroup').classList.add('hidden');
+            document.getElementById('endGameGroup').classList.remove('hidden');
+            document.getElementById('swapBtn').classList.add('hidden');
+            document.getElementById('mergeBtn').classList.add('hidden');
+            return;
+        } else {
+            document.getElementById('standardVoteGroup').classList.remove('hidden');
+            document.getElementById('endGameGroup').classList.add('hidden');
+        }
+
+        const immunitySelectDiv = document.getElementById('immunitySelect');
+        if (gameState.isMerged) {
+            immunitySelectDiv.classList.add('hidden');
+            document.getElementById('swapBtn').classList.add('hidden');
+        } else {
+            immunitySelectDiv.classList.remove('hidden');
+            gameState.tribes.forEach(t => {
+                const count = gameState.players.filter(p => p.currentTribe === t.id && p.status === 'active').length;
+                if(count > 0) {
+                    const label = document.createElement('label');
+                    label.style.padding = "5px";
+                    label.style.backgroundColor = "#eee";
+                    label.innerHTML = `
+                        <input type="checkbox" class="losing-tribe-chk" value="${t.id}"> <span style="font-weight:bold">${t.name}</span>
+                    `;
+                    losingTribeContainer.appendChild(label);
+                }
+            });
+        }
+        
+        const oldBtn = document.getElementById('f3-option-btn');
+        if(oldBtn) oldBtn.remove();
+        if(activePlayers === 3) {
+             const btn = document.createElement('button');
+             btn.id = 'f3-option-btn';
+             btn.innerText = "End Game & Proceed to Final Vote"; 
+             btn.className = "danger";
+             btn.style.marginTop = "10px";
+             btn.onclick = setupFinalVote;
+             document.getElementById('standardVoteGroup').appendChild(btn);
+        }
+    }
+
+    function setupVoting() {
+        let vulnerablePlayers = [];
+        
+        if (gameState.isMerged) {
+            vulnerablePlayers = gameState.players.filter(p => p.status === 'active');
+        } else {
+            const checkboxes = document.querySelectorAll('.losing-tribe-chk:checked');
+            if(checkboxes.length === 0 && gameState.currentPhase === 'normal') { alert("Select at least one losing tribe."); return; }
+            
+            if (gameState.currentPhase === 'normal') {
+                checkboxes.forEach(chk => {
+                    const tribeId = parseInt(chk.value);
+                    const tribePlayers = gameState.players.filter(p => p.currentTribe === tribeId && p.status === 'active');
+                    vulnerablePlayers = [...vulnerablePlayers, ...tribePlayers];
+                });
+            } else {
+                vulnerablePlayers = gameState.currentVoters.map(name => gameState.players.find(p => p.name === name));
+            }
+        }
+        
+        if (gameState.currentPhase === 'normal' && !gameState.isMerged && vulnerablePlayers.length === 2) {
+            triggerFireDirectly(vulnerablePlayers);
+            return;
+        }
+
+        if(gameState.currentPhase === 'normal') {
+            gameState.currentVoters = vulnerablePlayers.map(p => p.name);
+        }
+
+        const voteContainer = document.getElementById('voteInputs');
+        voteContainer.innerHTML = '';
+        const h3 = document.getElementById('votingHeader');
+        h3.innerText = gameState.currentPhase === 'revote' ? "Tribal Council (Revote)" : "Tribal Council";
+
+        vulnerablePlayers.forEach(p => {
+            if (gameState.currentPhase === 'revote' && gameState.tiedPlayers.includes(p.name)) return; 
+            
+            const div = document.createElement('div');
+            div.className = 'vote-input';
+            let options = `<option value="">-- Immune/Safe --</option>`;
+            
+            vulnerablePlayers.forEach(target => {
+                if (gameState.currentPhase === 'revote') {
+                    if (gameState.tiedPlayers.includes(target.name)) options += `<option value="${target.name}">${target.name}</option>`;
+                } else {
+                    if(target.name !== p.name) options += `<option value="${target.name}">${target.name}</option>`;
+                }
+            });
+
+            div.innerHTML = `<span>${p.name} votes for:</span><select id="vote-from-${p.name}">${options}</select>`;
+            voteContainer.appendChild(div);
+        });
+
+        document.getElementById('actionArea').classList.add('hidden');
+        document.getElementById('votingArea').classList.remove('hidden');
+    }
+
+    // --- Tribe Swap Logic ---
+    let swapTargetCount = 2;
+
+    function triggerSwapStart() {
+        const swapGroup = document.getElementById('swapControlGroup');
+        const voteGroup = document.getElementById('standardVoteGroup');
+        
+        voteGroup.classList.add('hidden');
+        swapGroup.classList.remove('hidden');
+        
+        swapGroup.innerHTML = `
+            <h4>Tribe Swap Configuration</h4>
+            <div class="form-group">
+                <label>How many tribes (2-4)?</label>
+                <input type="number" id="swapCount" min="2" max="4" value="${gameState.tribes.length}">
+            </div>
+            <button onclick="renderSwapColorSelection()">Next: Select Colors</button>
+            <button class="secondary" onclick="resetEpisodeUI()">Cancel</button>
+        `;
+    }
+
+    function renderSwapColorSelection() {
+        swapTargetCount = parseInt(document.getElementById('swapCount').value);
+        const swapGroup = document.getElementById('swapControlGroup');
+        const currentColors = gameState.tribes.map(t => t.name);
+        
+        let html = `<h4>Assign Swap Colors</h4>`;
+        
+        for (let i = 0; i < swapTargetCount; i++) {
+            let optionsHtml = "";
+            let isDisabled = false;
+            let defaultVal = "";
+
+            if (swapTargetCount > currentColors.length) {
+                if (i < currentColors.length) {
+                    optionsHtml = `<option value="${currentColors[i]}" selected>${currentColors[i]}</option>`;
+                    isDisabled = true;
+                    defaultVal = currentColors[i];
+                } else {
+                    const unused = availableColors.filter(c => !gameState.allTimeUsedColors.includes(c));
+                    optionsHtml = unused.map(c => `<option value="${c}">${c}</option>`).join('');
+                }
+            } else if (swapTargetCount < currentColors.length) {
+                optionsHtml = currentColors.map(c => `<option value="${c}">${c}</option>`).join('');
+            } else {
+                optionsHtml = `<option value="${currentColors[i]}" selected>${currentColors[i]}</option>`;
+                isDisabled = true;
+                defaultVal = currentColors[i];
+            }
+
+            html += `
+                <div class="form-group">
+                    <label>New Tribe ${i+1}</label>
+                    <select id="swapTribeColor${i}" ${isDisabled ? 'disabled' : ''}>${optionsHtml}</select>
+                    ${isDisabled ? `<input type="hidden" id="swapTribeColorHidden${i}" value="${defaultVal}">` : ''}
+                </div>
+            `;
+        }
+        
+        html += `<button onclick="renderSwapPlayerAssign()">Next: Assign Players</button>`;
+        swapGroup.innerHTML = html;
+    }
+
+    function renderSwapPlayerAssign() {
+        const newColors = [];
+        for (let i = 0; i < swapTargetCount; i++) {
+            let val = document.getElementById(`swapTribeColor${i}`).value;
+            if(document.getElementById(`swapTribeColorHidden${i}`)) {
+                val = document.getElementById(`swapTribeColorHidden${i}`).value;
+            }
+            newColors.push(val);
+        }
+        
+        if (new Set(newColors).size !== newColors.length) {
+            alert("Swapped tribes cannot have duplicate colors.");
+            return;
+        }
+
+        window.tempSwapTribes = newColors.map((c, idx) => ({ name: c, id: idx }));
+
+        const activePlayers = gameState.players.filter(p => p.status === 'active');
+        const swapGroup = document.getElementById('swapControlGroup');
+        
+        let tribeOptions = window.tempSwapTribes.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+        
+        let html = `<h4>Assign Players to New Tribes</h4>`;
+        activePlayers.forEach(p => {
+             html += `
+                <div style="margin-bottom:5px; border-bottom:1px solid #eee;">
+                    <strong>${p.name}:</strong> 
+                    <select id="swap-assign-${p.name}">${tribeOptions}</select>
+                </div>
+             `;
+        });
+        
+        html += `<button class="success" onclick="finalizeSwap()">Confirm Swap</button>`;
+        swapGroup.innerHTML = html;
+    }
+
+    function finalizeSwap() {
+        gameState.tribes = window.tempSwapTribes;
+        gameState.tribes.forEach(t => {
+            if(!gameState.allTimeUsedColors.includes(t.name)) {
+                gameState.allTimeUsedColors.push(t.name);
+            }
+        });
+        const activePlayers = gameState.players.filter(p => p.status === 'active');
+        activePlayers.forEach(p => {
+             const val = document.getElementById(`swap-assign-${p.name}`).value;
+             p.currentTribe = parseInt(val);
+        });
+        renderTable(); 
+        resetEpisodeUI();
+    }
+
+    // --- Merge Logic ---
+    function triggerMerge() {
+        const unused = availableColors.filter(c => !gameState.allTimeUsedColors.includes(c));
+        if (unused.length === 0) { alert("No unused colors left for merge!"); return; }
+        const choice = prompt(`Choose Merge Tribe Color from unused: ${unused.join(', ')}`, unused[0]);
+        if(!choice || !availableColors.includes(choice)) { alert("Invalid color selection."); return; }
+        if(gameState.allTimeUsedColors.includes(choice)) { alert("Cannot use a previously used color."); return; }
+
+        gameState.isMerged = true;
+        gameState.mergeColor = choice;
+        gameState.allTimeUsedColors.push(choice);
+        gameState.tribes = [{ name: choice, id: 99 }]; 
+        gameState.players.forEach(p => { if(p.status === 'active') p.currentTribe = 99; });
+        document.getElementById('mergeBtn').classList.add('hidden');
+        renderTable();
+        resetEpisodeUI();
+    }
+
+    // --- Results & Tally ---
+    let currentSortedVotes = [];
+
+    function calculateResults() {
+        const inputs = document.querySelectorAll('[id^="vote-from-"]');
+        let votes = {};
+        
+        inputs.forEach(input => {
+            const target = input.value;
+            if(target) {
+                if(!votes[target]) votes[target] = 0;
+                votes[target]++;
+            }
+        });
+
+        currentSortedVotes = Object.entries(votes).sort((a,b) => b[1] - a[1]);
+        
+        let tallyText = currentSortedVotes.map(v => `${v[0]}: ${v[1]}`).join(', ');
+        document.getElementById('tallyDisplay').innerText = "Vote Count: " + (tallyText || "No Votes Cast");
+        
+        let isTie = false;
+        if (currentSortedVotes.length >= 2) {
+            if (currentSortedVotes[0][1] === currentSortedVotes[1][1]) isTie = true;
+        }
+        
+        const elimControls = document.getElementById('eliminationControls');
+        const tieControls = document.getElementById('tieControls');
+        const f4FireControls = document.getElementById('f4FireControls');
+        const rockControls = document.getElementById('rockControls');
+        
+        elimControls.classList.add('hidden');
+        tieControls.classList.add('hidden');
+        f4FireControls.classList.add('hidden');
+        rockControls.classList.add('hidden');
+
+        if (isTie) {
+            const maxVotes = currentSortedVotes[0][1];
+            gameState.tiedPlayers = currentSortedVotes.filter(v => v[1] === maxVotes).map(v => v[0]);
+
+            if (gameState.currentPhase === 'normal') {
+                const activeCount = gameState.players.filter(p => p.status === 'active').length;
+                if (gameState.isMerged && activeCount === 4) {
+                     f4FireControls.classList.remove('hidden');
+                } else {
+                     tieControls.classList.remove('hidden');
+                }
+            } else {
+                rockControls.classList.remove('hidden');
+            }
+        } else {
+            elimControls.classList.remove('hidden');
+            const select = document.getElementById('confirmEliminated');
+            select.innerHTML = '';
+            
+            if(currentSortedVotes.length > 0) {
+                currentSortedVotes.forEach(([name, count]) => {
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    opt.text = `${name} (${count} votes)`;
+                    select.appendChild(opt);
+                });
+            }
+            gameState.players.filter(p => p.status === 'active').forEach(p => {
+                if(!votes[p.name]) {
+                    const opt = document.createElement('option');
+                    opt.value = p.name;
+                    opt.text = p.name;
+                    select.appendChild(opt);
+                }
+            });
+        }
+
+        document.getElementById('votingArea').classList.add('hidden');
+        document.getElementById('resultArea').classList.remove('hidden');
+    }
+
+    function editVotes() {
+        document.getElementById('resultArea').classList.add('hidden');
+        document.getElementById('votingArea').classList.remove('hidden');
+    }
+
+    // --- Fire / Rocks Logic ---
+    function triggerFireDirectly(participants) {
+        document.getElementById('actionArea').classList.add('hidden');
+        gameState.fireParticipants = participants.map(p => p.name);
+        setupFireUI();
+    }
+    
+    function triggerF4Fire() {
+        commitColumn("Tie", false); 
+        document.getElementById('resultArea').classList.add('hidden');
+        gameState.fireParticipants = gameState.tiedPlayers; 
+        setupFireUI();
+    }
+    
+    function setupFireUI() {
+        document.getElementById('fireMakingArea').classList.remove('hidden');
+        const container = document.getElementById('fireInputs');
+        container.innerHTML = '';
+        gameState.fireParticipants.forEach(name => {
+             const div = document.createElement('div');
+             div.className = 'vote-input';
+             div.innerHTML = `<span>${name}:</span><select id="fire-result-${name}"><option value="Won">Won</option><option value="Lost">Lost</option></select>`;
+             container.appendChild(div);
+        });
+    }
+    
+    function finalizeFire() {
+        const inputs = document.querySelectorAll('[id^="fire-result-"]');
+        let winners = 0; let losers = 0; let loserName = "";
+        inputs.forEach(inp => {
+            if(inp.value === "Won") winners++;
+            if(inp.value === "Lost") { losers++; loserName = inp.id.replace('fire-result-', ''); }
+        });
+        if (winners !== 1 || losers !== 1) { alert("There must be exactly one Winner and one Loser."); return; }
+        
+        gameState.history.push({ episode: gameState.episodeCount, type: 'fire', votedOut: loserName, voteTally: "Challenge" });
+        gameState.players.forEach(p => {
+             if(p.status !== 'active') return;
+             let action = ""; let cellClass = "";
+             let currentTribeName = gameState.isMerged ? gameState.mergeColor : gameState.tribes.find(t => t.id === p.currentTribe).name;
+             let tribeCss = gameState.isMerged ? `tribe-${gameState.mergeColor}` : `tribe-${currentTribeName}`;
+             if(gameState.fireParticipants.includes(p.name)) {
+                 const res = document.getElementById(`fire-result-${p.name}`).value;
+                 action = res; cellClass = "gray-cell";
+                 if(res === "Lost") { p.status = gameState.juryStarted ? 'jury' : 'out'; p.rank = gameState.eliminationOrder; gameState.eliminationOrder++; }
+             } else {
+                 if (gameState.isMerged) { action = ""; cellClass = "white-cell"; } else { action = ""; cellClass = tribeCss; }
+             }
+             p.history.push({ action: action, class: cellClass, tribeName: currentTribeName });
+        });
+        gameState.episodeCount++; renderTable(); resetEpisodeUI();
+    }
+
+    function triggerRevote() {
+        commitColumn("Tie", false); 
+        gameState.currentPhase = 'revote';
+        document.getElementById('resultArea').classList.add('hidden');
+        setupVoting(); 
+    }
+
+    function triggerRocks() {
+        commitColumn("Tie", false);
+        gameState.currentPhase = 'rocks';
+        document.getElementById('resultArea').classList.add('hidden');
+        document.getElementById('rockDrawArea').classList.remove('hidden');
+        const container = document.getElementById('rockInputs');
+        container.innerHTML = '';
+        const eligiblePlayers = gameState.currentVoters.map(name => gameState.players.find(p => p.name === name));
+        eligiblePlayers.forEach(p => {
+            const div = document.createElement('div');
+            div.className = 'vote-input';
+            div.innerHTML = `<span>${p.name}:</span><select id="rock-status-${p.name}"><option value="Immune" selected>Immune</option><option value="White Rock">White Rock</option><option value="Black Rock">Black Rock</option></select>`;
+            container.appendChild(div);
+        });
+    }
+
+    function finalizeRocks() {
+        const inputs = document.querySelectorAll('[id^="rock-status-"]');
+        let blackRockVictim = null; let blackRockCount = 0;
+        inputs.forEach(inp => { if (inp.value === "Black Rock") { blackRockCount++; blackRockVictim = inp.id.replace('rock-status-', ''); } });
+        if (blackRockCount !== 1) { alert("Exactly ONE player must have the Black Rock."); return; }
+        gameState.history.push({ episode: gameState.episodeCount, type: 'rock', votedOut: blackRockVictim, voteTally: "Rocks" });
+        gameState.players.forEach(p => {
+            if(p.status !== 'active') return;
+            const input = document.getElementById(`rock-status-${p.name}`);
+            let action = input ? input.value : "";
+            let currentTribeName = gameState.isMerged ? gameState.mergeColor : gameState.tribes.find(t => t.id === p.currentTribe).name;
+            let tribeCss = gameState.isMerged ? `tribe-${gameState.mergeColor}` : `tribe-${currentTribeName}`;
+            if (p.name === blackRockVictim) { p.status = gameState.juryStarted ? 'jury' : 'out'; p.rank = gameState.eliminationOrder; gameState.eliminationOrder++; }
+            p.history.push({ action: action, class: tribeCss, tribeName: currentTribeName });
+        });
+        gameState.episodeCount++; renderTable(); resetEpisodeUI();
+    }
+
+    // --- Standard Finalize ---
+    function finalizeEpisode() {
+        const eliminatedName = document.getElementById('confirmEliminated').value;
+        commitColumn(eliminatedName, true); 
+    }
+
+    function commitColumn(eliminatedName, isFinalElimination) {
+        let tallyString = currentSortedVotes.length > 0 ? currentSortedVotes.map(entry => entry[1]).join('-') : "-";
+        gameState.history.push({ episode: gameState.episodeCount, type: 'normal', votedOut: eliminatedName, voteTally: tallyString });
+        gameState.players.forEach(p => {
+            if(p.status !== 'active') return;
+            const voteInput = document.getElementById(`vote-from-${p.name}`);
+            let action = ""; let cellClass = "";
+            let currentTribeName = gameState.isMerged ? gameState.mergeColor : gameState.tribes.find(t => t.id === p.currentTribe).name;
+            let tribeCss = gameState.isMerged ? `tribe-${gameState.mergeColor}` : `tribe-${currentTribeName}`;
+            if (voteInput) {
+                if (gameState.currentPhase === 'revote' && gameState.tiedPlayers.includes(p.name)) { action = "None"; cellClass = "gray-cell"; }
+                else {
+                    const votedFor = voteInput.value;
+                    if(p.name === eliminatedName && isFinalElimination) { action = `${votedFor || '-'}`; cellClass = tribeCss; p.status = gameState.juryStarted ? 'jury' : 'out'; p.rank = gameState.eliminationOrder; gameState.eliminationOrder++; }
+                    else { action = votedFor || "-"; cellClass = tribeCss; }
+                }
+            } else {
+                if (gameState.currentPhase === 'revote' && gameState.tiedPlayers.includes(p.name)) { action = "None"; cellClass = "gray-cell"; }
+                else { action = ""; cellClass = tribeCss; }
+            }
+            p.history.push({ action: action, class: cellClass, tribeName: currentTribeName });
+        });
+        if (isFinalElimination) { gameState.episodeCount++; renderTable(); resetEpisodeUI(); } else { renderTable(); }
+    }
+
+    // --- Special Events (Misc) ---
+    function toggleJury() { gameState.juryStarted = true; document.getElementById('juryBtn').classList.add('hidden'); alert("Jury Phase Started."); }
+    function setupFinalVote() { document.getElementById('actionArea').classList.add('hidden'); document.getElementById('finalVoteArea').classList.remove('hidden'); const finalists = gameState.players.filter(p => p.status === 'active'); const jurors = gameState.players.filter(p => p.status === 'jury'); const container = document.getElementById('jurorVoteInputs'); container.innerHTML = `<p><strong>Finalists:</strong> ${finalists.map(f => f.name).join(', ')}</p>`; jurors.forEach(j => { let opts = ""; finalists.forEach(f => opts += `<option value="${f.name}">${f.name}</option>`); const div = document.createElement('div'); div.className = 'vote-input'; div.innerHTML = `<span>${j.name} votes for winner:</span><select id="final-vote-${j.name}">${opts}</select>`; container.appendChild(div); }); }
+    function calculateWinner() { const inputs = document.querySelectorAll('[id^="final-vote-"]'); let tallies = {}; const finalists = gameState.players.filter(p=>p.status === 'active'); finalists.forEach(f => tallies[f.name] = 0); inputs.forEach(inp => { const vote = inp.value; if(vote) tallies[vote]++; }); const sortedFinalists = finalists.sort((a,b) => tallies[b.name] - tallies[a.name]); const winnerName = sortedFinalists[0].name; let finalTally = Object.values(tallies).sort((a,b)=>b-a).join('-'); gameState.history.push({ episode: "Finale", type: 'final', votedOut: winnerName, voteTally: finalTally }); gameState.players.forEach(p => { let action = ""; let css = `tribe-${gameState.mergeColor}`; let shouldAddFinalCell = false; if(p.status === 'jury') { action = document.getElementById(`final-vote-${p.name}`).value; shouldAddFinalCell = true; } else if (p.status === 'active') { shouldAddFinalCell = true; if (p.name === winnerName) { action = "Winner"; p.rank = 5000; css = "finalist-gold"; } else { const myVotes = tallies[p.name]; const index = sortedFinalists.indexOf(p); if (index === 1) { if(sortedFinalists.length > 2 && tallies[sortedFinalists[2].name] === myVotes) { action = "Co Runner-Up"; css="finalist-silver"; } else { action = "Runner-Up"; css="finalist-silver"; } } else { if(tallies[sortedFinalists[1].name] === myVotes) { action = "Co Runner-Up"; css="finalist-silver"; } else { action = "2nd Runner-Up"; css="finalist-bronze"; } } p.rank = 4000 - index; } } if (shouldAddFinalCell) { const currentLen = p.history.length; const neededSpacers = (gameState.history.length - 1) - currentLen; for(let k=0; k<neededSpacers; k++) { p.history.push({ action: "", class: "spacer", tribeName: "" }); } p.history.push({ action: action, class: css, tribeName: gameState.mergeColor }); } }); renderTable(); alert(`The Winner is ${winnerName}!`); document.getElementById('finalVoteArea').innerHTML = "<h3>Game Over</h3>"; }
+
+    function renderTable() {
+        const thead = document.getElementById('tableHeader');
+        const tbody = document.getElementById('tableBody');
+        gameState.players.sort((a, b) => b.rank - a.rank);
+        let row1 = `<tr><th rowspan="3" class="castaway-col">Castaway</th>`; let row2 = `<tr>`; let row3 = `<tr>`;
+        let colIndex = 0;
+        while(colIndex < gameState.history.length) {
+            let item = gameState.history[colIndex]; let span = 1;
+            if (item.type !== 'final') { for(let k=colIndex+1; k<gameState.history.length; k++) { if(gameState.history[k].episode === item.episode && gameState.history[k].type !== 'final') { span++; } else { break; } } }
+            row1 += `<th colspan="${span}">${item.type === 'final' ? 'Finale' : 'Ep ' + item.episode}</th>`;
+            for(let i=0; i<span; i++) { let subItem = gameState.history[colIndex + i]; row2 += `<th>${subItem.votedOut || ''}</th>`; row3 += `<th>${subItem.voteTally || '-'}</th>`; }
+            colIndex += span;
+        }
+        row1 += `</tr>`; row2 += `</tr>`; row3 += `</tr>`;
+        thead.innerHTML = row1 + row2 + row3;
+        tbody.innerHTML = '';
+        gameState.players.forEach(p => {
+            const tr = document.createElement('tr');
+            const tdName = document.createElement('td'); tdName.className = 'row-name castaway-col'; tdName.innerText = p.name; tr.appendChild(tdName);
+            p.history.forEach(h => {
+                const td = document.createElement('td'); td.innerText = h.action;
+                if (h.class === 'spacer') td.className = 'spacer'; 
+                else if (h.class === 'finalist-gold') td.className = 'finalist-gold'; 
+                else if (h.class === 'finalist-silver') td.className = 'finalist-silver'; 
+                else if (h.class === 'finalist-bronze') td.className = 'finalist-bronze'; 
+                else if (h.class === 'gray-cell') td.className = 'gray-cell'; 
+                else if (h.class === 'white-cell') td.className = 'white-cell'; 
+                else td.className = `tribe-${h.tribeName}`;
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+    }
+
+    function exportToJpeg() {
+        const captureElement = document.getElementById('captureArea');
+        html2canvas(captureElement, { backgroundColor: "#ffffff", scale: 2 }).then(canvas => {
+            const link = document.createElement('a'); link.download = 'survivor_table.jpg'; link.href = canvas.toDataURL("image/jpeg", 1.0); link.click();
+        });
+    }
+</script>
+
+</body>
+</html>
