@@ -65,7 +65,7 @@
             position: relative;
         }
 
-        /* The Grid - This is where the magic happens for rows */
+        /* The Grid */
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -131,7 +131,7 @@
         .img-container img {
             width: 100%;
             height: 100%;
-            object-fit: contain; /* Prevents the image from stretching weirdly */
+            object-fit: contain;
             display: none;
         }
 
@@ -276,6 +276,7 @@
             const newPet = {
                 id: Date.now().toString(),
                 name: '',
+                gender: '',
                 species: '',
                 image: '',
                 timestamp: Date.now()
@@ -334,6 +335,7 @@
                 const card = document.createElement('div');
                 card.className = 'card';
                 
+                // Image Container
                 const imgContainer = document.createElement('div');
                 imgContainer.className = 'img-container';
                 imgContainer.tabIndex = 0; 
@@ -350,12 +352,23 @@
                     imgContainer.innerHTML = `<p>Click<br>Ctrl+V</p>`;
                 }
 
+                // Name Input
                 const nameInput = document.createElement('input');
                 nameInput.type = 'text';
                 nameInput.placeholder = 'Pet Name';
-                nameInput.value = pet.name;
+                nameInput.value = pet.name || '';
                 nameInput.addEventListener('input', (e) => updatePetData(pet.id, 'name', e.target.value));
 
+                // Gender Dropdown
+                const genderSelect = document.createElement('select');
+                genderSelect.innerHTML = `
+                    <option value="" disabled ${!pet.gender ? 'selected' : ''}>Gender...</option>
+                    <option value="Male" ${pet.gender === 'Male' ? 'selected' : ''}>Male</option>
+                    <option value="Female" ${pet.gender === 'Female' ? 'selected' : ''}>Female</option>
+                `;
+                genderSelect.addEventListener('change', (e) => updatePetData(pet.id, 'gender', e.target.value));
+
+                // Species Dropdown
                 const speciesSelect = document.createElement('select');
                 speciesSelect.innerHTML = `<option value="" disabled ${!pet.species ? 'selected' : ''}>Species...</option>`;
                 SPECIES_LIST.forEach(sp => {
@@ -363,6 +376,7 @@
                 });
                 speciesSelect.addEventListener('change', (e) => updatePetData(pet.id, 'species', e.target.value));
 
+                // Delete Button
                 const delBtn = document.createElement('button');
                 delBtn.className = 'delete-btn';
                 delBtn.innerText = 'X';
@@ -371,6 +385,7 @@
                 card.appendChild(delBtn);
                 card.appendChild(imgContainer);
                 card.appendChild(nameInput);
+                card.appendChild(genderSelect);
                 card.appendChild(speciesSelect);
 
                 grid.appendChild(card);
