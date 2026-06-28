@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LPS Collection Tracker</title>
+    <style>
+        :root {
+            --bg-color: #f4f4f9;
+            --sidebar-bg: #2c3e50;
+            --text-light: #ecf0f1;
+            --card-bg: #ffffff;
+            --primary: #3498db;
+            --accent: #e74c3c;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar Styles */
+        .sidebar {
+            width: 250px;
+            background-color: var(--sidebar-bg);
+            color: var(--text-light);
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .sidebar h2 { margin-top: 0; font-size: 1.2rem; }
+        .filter-group { margin-bottom: 20px; font-size: 0.9rem; }
+        .filter-group label { display: block; margin: 6px 0; cursor: pointer; }
+        
+        select.sort-select {
+            width: 100%;
+            padding: 6px;
+            margin-top: 5px;
+            border-radius: 4px;
+            border: none;
+            font-size: 0.9rem;
+        }
+
+        .checkbox-list {
+            background: rgba(255,255,255,0.1);
+            padding: 10px;
+            border-radius: 5px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        hr { border-color: rgba(255,255,255,0.2); margin: 20px 0; }
+
+        /* Main Content Styles */
+        .main-content {
+            flex-grow: 1;
+            padding: 20px;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        /* The Grid - This is where the magic happens for rows */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 15px;
+            padding-bottom: 100px; /* Room for the plus button */
+        }
+
+        /* Compact Card Styles */
+        .card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            padding: 8px;
+            box-sizing: border-box;
+            transition: transform 0.1s;
+            position: relative;
+        }
+
+        .card:hover { transform: translateY(-3px); }
+
+        .delete-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            display: none;
+            z-index: 10;
+        }
+        .card:hover .delete-btn { display: block; }
+
+        .img-container {
+            width: 100%;
+            height: 120px; /* Locked height so it stays compact */
+            background-color: #e0e0e0;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            cursor: pointer;
+            border: 2px dashed #bdc3c7;
+            box-sizing: border-box;
+        }
+
+        .img-container:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 8px rgba(52, 152, 219, 0.5);
+        }
+
+        .img-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* Prevents the image from stretching weirdly */
+            display: none;
+        }
+
+        .img-container p {
+            color: #7f8c8d;
+            font-size: 0.75rem;
+            text-align: center;
+            padding: 5px;
+            pointer-events: none;
+            margin: 0;
+        }
+
+        .card input[type="text"], .card select {
+            width: 100%;
+            padding: 5px;
+            margin-bottom: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-family: inherit;
+            font-size: 0.8rem;
+        }
+
+        /* FAB Button */
+        .fab {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 50px;
+            height: 50px;
+            background-color: var(--primary);
+            color: white;
+            border-radius: 50%;
+            font-size: 28px;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+        }
+        .fab:hover { background-color: #2980b9; }
+
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <h2>LPS Organizer</h2>
+        
+        <div class="filter-group">
+            <label><b>Sort By:</b></label>
+            <select class="sort-select" id="sortSelect">
+                <option value="newest">Order Entered (Newest First)</option>
+                <option value="oldest">Order Entered (Oldest First)</option>
+                <option value="alpha">Alphabetical (A-Z)</option>
+            </select>
+        </div>
+
+        <hr>
+
+        <div class="filter-group">
+            <label><b>Filter by Species:</b></label>
+            <label><input type="checkbox" id="showAll" checked> <i>Show All</i></label>
+            <div class="checkbox-list" id="speciesFilters">
+                </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="grid" id="petGrid">
+            </div>
+        <button class="fab" id="addBtn">+</button>
+    </div>
+
+    <script>
+        const SPECIES_LIST = [
+            "Dog", "Cat", "Rodent", "Bird", "Marine Animal", 
+            "Reptile/Amphibian", "Insect", "Horse", "Farm Animal", 
+            "Monkey", "Bear", "Deer", "Fox", "Other"
+        ];
+
+        let pets = JSON.parse(localStorage.getItem('lps_pets')) || [];
+        let activeCardId = null;
+
+        function init() {
+            setupFilters();
+            setupEventListeners();
+            renderGrid();
+        }
+
+        function setupFilters() {
+            const filterContainer = document.getElementById('speciesFilters');
+            SPECIES_LIST.forEach(species => {
+                const label = document.createElement('label');
+                label.innerHTML = `<input type="checkbox" class="species-cb" value="${species}" checked> ${species}`;
+                filterContainer.appendChild(label);
+            });
+        }
+
+        function setupEventListeners() {
+            document.getElementById('addBtn').addEventListener('click', addNewPet);
+            document.getElementById('sortSelect').addEventListener('change', renderGrid);
+            document.getElementById('showAll').addEventListener('change', (e) => {
+                const isChecked = e.target.checked;
+                document.querySelectorAll('.species-cb').forEach(cb => {
+                    cb.checked = isChecked;
+                });
+                renderGrid();
+            });
+
+            document.getElementById('speciesFilters').addEventListener('change', (e) => {
+                if(e.target.classList.contains('species-cb')) {
+                    const allCbs = Array.from(document.querySelectorAll('.species-cb'));
+                    const allChecked = allCbs.every(cb => cb.checked);
+                    document.getElementById('showAll').checked = allChecked;
+                    renderGrid();
+                }
+            });
+
+            document.addEventListener('paste', function(e) {
+                if (!activeCardId) return; 
+                
+                const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+                for (let index in items) {
+                    const item = items[index];
+                    if (item.kind === 'file' && item.type.includes('image')) {
+                        const blob = item.getAsFile();
+                        const reader = new FileReader();
+                        reader.onload = function(event) {
+                            updatePetData(activeCardId, 'image', event.target.result);
+                            renderGrid();
+                        };
+                        reader.readAsDataURL(blob);
+                    }
+                }
+            });
+        }
+
+        function addNewPet() {
+            const newPet = {
+                id: Date.now().toString(),
+                name: '',
+                species: '',
+                image: '',
+                timestamp: Date.now()
+            };
+            pets.push(newPet);
+            saveData();
+            
+            if(document.getElementById('sortSelect').value === 'oldest') {
+                document.getElementById('sortSelect').value = 'newest';
+            }
+            renderGrid();
+        }
+
+        function updatePetData(id, field, value) {
+            const petIndex = pets.findIndex(p => p.id === id);
+            if (petIndex > -1) {
+                pets[petIndex][field] = value;
+                saveData();
+            }
+        }
+
+        function deletePet(id) {
+            if(confirm("You sure you want to delete this pet?")) {
+                pets = pets.filter(p => p.id !== id);
+                saveData();
+                renderGrid();
+            }
+        }
+
+        function saveData() {
+            try {
+                localStorage.setItem('lps_pets', JSON.stringify(pets));
+            } catch (e) {
+                alert("Oh shit, memory limit reached! Try pasting smaller images.");
+            }
+        }
+
+        function renderGrid() {
+            const grid = document.getElementById('petGrid');
+            grid.innerHTML = ''; 
+
+            const activeSpecies = Array.from(document.querySelectorAll('.species-cb:checked')).map(cb => cb.value);
+            let filteredPets = pets.filter(pet => {
+                if(!pet.species) return true; 
+                return activeSpecies.includes(pet.species);
+            });
+
+            const sortMode = document.getElementById('sortSelect').value;
+            filteredPets.sort((a, b) => {
+                if (sortMode === 'newest') return b.timestamp - a.timestamp;
+                if (sortMode === 'oldest') return a.timestamp - b.timestamp;
+                if (sortMode === 'alpha') return (a.name || '').localeCompare(b.name || '');
+            });
+
+            filteredPets.forEach(pet => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                
+                const imgContainer = document.createElement('div');
+                imgContainer.className = 'img-container';
+                imgContainer.tabIndex = 0; 
+                imgContainer.title = "Click me, then press Ctrl+V to paste an image!";
+                
+                imgContainer.addEventListener('focus', () => { activeCardId = pet.id; });
+                imgContainer.addEventListener('blur', () => { 
+                    setTimeout(() => { if(activeCardId === pet.id) activeCardId = null; }, 100); 
+                });
+
+                if (pet.image) {
+                    imgContainer.innerHTML = `<img src="${pet.image}" style="display:block;">`;
+                } else {
+                    imgContainer.innerHTML = `<p>Click<br>Ctrl+V</p>`;
+                }
+
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.placeholder = 'Pet Name';
+                nameInput.value = pet.name;
+                nameInput.addEventListener('input', (e) => updatePetData(pet.id, 'name', e.target.value));
+
+                const speciesSelect = document.createElement('select');
+                speciesSelect.innerHTML = `<option value="" disabled ${!pet.species ? 'selected' : ''}>Species...</option>`;
+                SPECIES_LIST.forEach(sp => {
+                    speciesSelect.innerHTML += `<option value="${sp}" ${pet.species === sp ? 'selected' : ''}>${sp}</option>`;
+                });
+                speciesSelect.addEventListener('change', (e) => updatePetData(pet.id, 'species', e.target.value));
+
+                const delBtn = document.createElement('button');
+                delBtn.className = 'delete-btn';
+                delBtn.innerText = 'X';
+                delBtn.onclick = () => deletePet(pet.id);
+
+                card.appendChild(delBtn);
+                card.appendChild(imgContainer);
+                card.appendChild(nameInput);
+                card.appendChild(speciesSelect);
+
+                grid.appendChild(card);
+            });
+        }
+
+        init();
+
+    </script>
+</body>
+</html>
