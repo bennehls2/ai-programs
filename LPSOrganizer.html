@@ -209,16 +209,27 @@
     </div>
 
     <script>
+        // Alphabetized list, with "Other" kept at the very end
         const SPECIES_LIST = [
-            "Dog", "Cat", "Rodent", "Bird", "Marine Animal", 
-            "Reptile/Amphibian", "Insect", "Horse", "Farm Animal", 
-            "Monkey", "Bear", "Deer", "Fox", "Other"
+            "Bear", "Big Cat", "Bird", "Cat", "Deer", "Dog", "Farm Animal", 
+            "Fox", "Horse/Donkey", "Insect", "Marine Animal", "Monkey", 
+            "Otter/Seal/Walrus", "Rabbits", "Reptile/Amphibian", "Rodent", "Wolf", "Other"
         ];
 
         let pets = JSON.parse(localStorage.getItem('lps_pets')) || [];
         let activeCardId = null;
 
         function init() {
+            // Quick migration for any old pets saved as "Horse" so they don't break
+            let needsSave = false;
+            pets.forEach(p => {
+                if (p.species === 'Horse') {
+                    p.species = 'Horse/Donkey';
+                    needsSave = true;
+                }
+            });
+            if (needsSave) saveData();
+
             setupFilters();
             setupEventListeners();
             renderGrid();
