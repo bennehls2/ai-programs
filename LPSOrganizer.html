@@ -329,16 +329,28 @@
             // Migration script for old users
             let oldData = JSON.parse(localStorage.getItem('lps_pets')) || [];
             if (oldData.length > 0) {
-                console.log("Migrating old pets to the new big-ass database...");
                 for (let p of oldData) {
                     if (p.species === 'Horse') p.species = 'Horse/Donkey'; 
                     savePetToDB(p);
                 }
                 localStorage.removeItem('lps_pets');
-                alert("Boom. Moved your old pets over to the new high-capacity database!");
             }
 
             pets = await loadPetsFromDB();
+
+            // GHOST HUNTER: Fix pets with invalid/old species tags
+            let foundGhosts = false;
+            pets.forEach(p => {
+                if (p.species && !SPECIES_LIST.includes(p.species)) {
+                    p.species = ''; // Blank it out so it shows up in the UI again
+                    savePetToDB(p); // Save the fix to the DB
+                    foundGhosts = true;
+                }
+            });
+
+            if (foundGhosts) {
+                alert("Heads up! I found some pets with old species categories that don't exist anymore. I set their species to blank so they show up on your screen again. You can delete or fix 'em now!");
+            }
 
             setupFilters();
             setupEventListeners();
@@ -405,7 +417,6 @@
 
             // Copy Names Button
             document.getElementById('copyNamesBtn').addEventListener('click', () => {
-                // Filter out pets that don't have a name typed in yet
                 const nameList = pets.map(p => p.name).filter(name => name && name.trim() !== '');
                 
                 if (nameList.length === 0) {
@@ -421,7 +432,6 @@
                     btn.innerText = "Copied! ✅";
                     setTimeout(() => { btn.innerText = originalText; }, 2000);
                 }).catch(err => {
-                    // Fallback just in case the browser blocks the clipboard
                     alert("Damn, clipboard access failed. You can copy them from here:\n\n" + nameString);
                 });
             });
