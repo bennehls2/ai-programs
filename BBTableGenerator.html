@@ -319,7 +319,6 @@
             
             if(format === 'blockbuster') {
                 bbActive = true;
-                // Reveal the Block Buster row in the table HTML
                 document.getElementById('row-header-bb-winner').classList.remove('hidden');
             }
 
@@ -389,7 +388,6 @@
                 document.getElementById('regular-week-events').classList.remove('hidden');
                 populateSelect('sel-veto', active); 
                 
-                // Toggle Block Buster inputs based on status
                 if(bbActive) {
                     document.getElementById('sel-init-3').classList.remove('hidden');
                     document.getElementById('grp-bb-winner').classList.remove('hidden');
@@ -539,7 +537,6 @@
             renderColumn(weekResult);
             sortRows();
 
-            // Handle ending the Block Buster
             if(bbActive && document.getElementById('chk-bb-end').checked) {
                 bbActive = false;
             }
@@ -622,7 +619,6 @@
 
         function formatNoms(nomsArray) {
             if (!nomsArray || !nomsArray[0]) return '';
-            // Filter out nulls (handles 2 or 3 noms easily)
             const validNoms = nomsArray.filter(n => n);
             const sorted = [...validNoms].sort();
             return sorted.join('<br>');
@@ -645,7 +641,6 @@
             let vetoClass = (isFinale || isF3) ? 'bg-dark-grey' : '';
             addCell('row-header-veto', vetoTxt, vetoClass);
             
-            // Render BB Winner cell if this is a Blockbuster season
             if(format === 'blockbuster') {
                 let bbTxt = (isFinale || isF3 || !data.wasBBActive) ? '' : (data.bbWin || '');
                 let bbClass = (isFinale || isF3 || !data.wasBBActive) ? 'bg-dark-grey' : '';
@@ -671,14 +666,18 @@
                     if (p.status === 'active' || (p.evictionWeek === weekCount)) {
                         if(p.name === data.hoh) {
                             td.className = 'bg-hoh';
-                            td.innerHTML = data.tiebreaker ? data.tiebreaker : "<i>Head of<br>Household</i>";
+                            // Checking for Final 3 specifically here to show the vote
+                            if (isF3 && data.votes[data.hoh]) {
+                                td.innerHTML = data.votes[data.hoh];
+                            } else {
+                                td.innerHTML = data.tiebreaker ? data.tiebreaker : "<i>Head of<br>Household</i>";
+                            }
                         } 
                         else if(data.final.includes(p.name)) {
                             td.className = 'bg-nominee';
                             td.innerHTML = "<i>Nominated</i>";
                         } 
                         else if(data.wasBBActive && p.name === data.bbWin) {
-                            // Block Buster winner formatting
                             td.className = 'bg-blockbuster';
                             td.innerText = data.votes[p.name] || "";
                         }
@@ -698,7 +697,6 @@
                 }
             });
 
-            // Footer Logic
             const footRow1 = document.getElementById('row-footer-row1');
             const footRow2 = document.getElementById('row-footer-row2');
             
