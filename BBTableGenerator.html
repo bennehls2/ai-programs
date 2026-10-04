@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Big Brother Wiki Table Generator</title>
+    <!-- Include html2canvas library for Image export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         body {
@@ -73,7 +74,7 @@
         }
 
         .hidden {
-            display: none;
+            display: none !important;
         }
 
         /* --- Table Styling --- */
@@ -83,15 +84,13 @@
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            text-align: center; /* Centers the table within the container */
+            text-align: center; 
         }
 
         table {
             border-collapse: collapse;
             font-size: 13px;
-            margin: 0 auto; /* Centers the table */
-            
-            /* KEY CHANGE: Auto width prevents stretching */
+            margin: 0 auto; 
             width: auto; 
             table-layout: auto; 
         }
@@ -102,15 +101,12 @@
             text-align: center; 
             vertical-align: middle;
             color: #202122;
-            
-            /* Text Wrapping Logic to fit longest word */
             white-space: normal; 
             word-wrap: break-word; 
-            max-width: 110px; /* Restrict max width to force wrapping */
+            max-width: 110px; 
             line-height: 1.2;
         }
 
-        /* Specific Header Column Styling */
         .header-col {
             background-color: #eaecf0;
             font-weight: bold;
@@ -131,26 +127,28 @@
             border-bottom: 3px solid black;
         }
 
-        #row-footer-evicted th,
-        #row-footer-evicted td {
+        #row-footer-row1 th,
+        #row-footer-row1 td {
             border-top: 3px solid black;
         }
 
-        /* --- Colors & Styles --- */
-        .bg-hoh { background-color: #98fb98; }
-        .bg-nominee { background-color: #add8e6; }
-        .bg-evicted-bar { background-color: #ffcccc; }
-        .bg-winner { background-color: #ffd700; }
-        .bg-runnerup { background-color: #c0c0c0; }
+        /* --- Colors (Wikipedia Verified) --- */
+        .bg-winner { background-color: #73FB76; }
+        .bg-runnerup { background-color: #D1E8EF; }
+        .bg-hoh { background-color: #CCFFCC; }
+        .bg-nominee { background-color: #959FFD; }
+        .bg-evicted-bar { background-color: salmon; }
         .bg-jury { background-color: white; }
+        .bg-blockbuster { background-color: #FDD5B1; }
 
-        /* Continuous Dark Grey Block Logic */
+        /* Continuous Grey Block Logic */
         .bg-dark-grey { 
-            background-color: #888888; 
-            border-top-color: #888888;
-            border-bottom-color: #888888;
+            background-color: #CCCCCC; 
+            border-top-color: #CCCCCC;
+            border-bottom-color: #CCCCCC;
             border-left-color: #a2a9b1;
             border-right-color: #a2a9b1;
+            color: transparent;
         }
 
         #row-header-noms-final .bg-dark-grey {
@@ -177,6 +175,13 @@
                 <label>Number of Contestants (10-30):</label>
                 <input type="number" id="num-players" min="10" max="30" value="16">
             </div>
+            <div class="input-group">
+                <label>Season Format:</label>
+                <select id="season-format">
+                    <option value="regular">Regular</option>
+                    <option value="blockbuster">BB Block Buster</option>
+                </select>
+            </div>
             <button onclick="initNamesInputs()">Next: Enter Names</button>
         </div>
 
@@ -202,11 +207,17 @@
                         <div style="display:flex; gap:10px;">
                             <select id="sel-init-1"></select>
                             <select id="sel-init-2"></select>
+                            <select id="sel-init-3" class="hidden"></select>
                         </div>
                     </div>
                     <div class="input-group">
                         <label>Veto Winner:</label>
                         <select id="sel-veto"></select>
+                    </div>
+                    
+                    <div class="input-group hidden" id="grp-bb-winner">
+                        <label>Block Buster Winner:</label>
+                        <select id="sel-bb-winner"></select>
                     </div>
                 </div>
 
@@ -221,6 +232,12 @@
                 <div class="input-group" id="jury-toggle-container">
                     <label>
                         <input type="checkbox" id="chk-jury"> Jury Phase Begins Now?
+                    </label>
+                </div>
+                
+                <div class="input-group hidden" id="bb-toggle-container">
+                    <label>
+                        <input type="checkbox" id="chk-bb-end"> Block Buster Ends After This Round?
                     </label>
                 </div>
 
@@ -242,11 +259,12 @@
 
         <div id="phase-end" class="hidden">
             <h2>Season Complete</h2>
-            <p>The table is ready below.</p>
+            <p>Your table is ready below.</p>
             <button class="btn-success" onclick="exportJPEG()">Download Table as JPEG</button>
         </div>
     </div>
 
+    <!-- The Table -->
     <div class="table-container" id="table-to-print">
         <table id="bb-table">
             <thead>
@@ -262,18 +280,22 @@
                 <tr id="row-header-veto">
                     <th class="header-col">Veto Winner</th>
                 </tr>
+                <tr id="row-header-bb-winner" class="hidden">
+                    <th class="header-col">Block Buster<br>Winner</th>
+                </tr>
                 <tr id="row-header-noms-final">
                     <th class="header-col">Nominations<br>(Final)</th>
                 </tr>
             </thead>
             <tbody id="table-body">
-                </tbody>
+                <!-- Rows generated via JS -->
+            </tbody>
             <tfoot>
-                <tr id="row-footer-evicted">
-                    <th class="header-col">Evicted</th>
+                <tr id="row-footer-row1">
+                    <th class="header-col" rowspan="2">Evicted</th>
                 </tr>
-                <tr id="row-footer-votes">
-                    <th class="header-col">Vote</th>
+                <tr id="row-footer-row2">
+                    <!-- Second row for the split finale cells -->
                 </tr>
             </tfoot>
         </table>
@@ -285,12 +307,22 @@
         let weekCount = 1;
         let isJury = false;
         let gameData = [];
+        let format = 'regular'; // 'regular' or 'blockbuster'
+        let bbActive = false; // Toggles on/off during a blockbuster season
 
         const getActive = () => players.filter(p => p.status === 'active');
 
         // --- Setup Functions ---
         function initNamesInputs() {
             const count = document.getElementById('num-players').value;
+            format = document.getElementById('season-format').value;
+            
+            if(format === 'blockbuster') {
+                bbActive = true;
+                // Reveal the Block Buster row in the table HTML
+                document.getElementById('row-header-bb-winner').classList.remove('hidden');
+            }
+
             const container = document.getElementById('names-container');
             container.innerHTML = '';
             for(let i=1; i<=count; i++) {
@@ -352,10 +384,23 @@
             
             if(active.length === 3) {
                 document.getElementById('regular-week-events').classList.add('hidden');
+                document.getElementById('bb-toggle-container').classList.add('hidden');
             } else {
                 document.getElementById('regular-week-events').classList.remove('hidden');
                 populateSelect('sel-veto', active); 
+                
+                // Toggle Block Buster inputs based on status
+                if(bbActive) {
+                    document.getElementById('sel-init-3').classList.remove('hidden');
+                    document.getElementById('grp-bb-winner').classList.remove('hidden');
+                    document.getElementById('bb-toggle-container').classList.remove('hidden');
+                } else {
+                    document.getElementById('sel-init-3').classList.add('hidden');
+                    document.getElementById('grp-bb-winner').classList.add('hidden');
+                    document.getElementById('bb-toggle-container').classList.add('hidden');
+                }
             }
+            
             updateNomOptions();
 
             if(isJury || active.length <= 3) {
@@ -372,7 +417,10 @@
             if(!isF3) {
                 populateSelect('sel-init-1', nominees);
                 populateSelect('sel-init-2', nominees);
+                if(bbActive) populateSelect('sel-init-3', nominees);
+                
                 populateSelect('sel-veto', active);
+                if(bbActive) populateSelect('sel-bb-winner', active);
             }
             populateSelect('sel-final-1', nominees);
             populateSelect('sel-final-2', nominees);
@@ -381,24 +429,31 @@
         function goToVoting() {
             const active = getActive();
             const hoh = document.getElementById('sel-hoh').value;
-            let nom1, nom2, veto, init1, init2;
+            let nom1, nom2, veto, bbWin, init1, init2, init3;
 
             if(active.length === 3) {
                 const others = active.filter(p => p.name !== hoh);
                 nom1 = others[0].name;
                 nom2 = others[1].name;
-                veto = null; init1 = null; init2 = null;
+                veto = null; bbWin = null; init1 = null; init2 = null; init3 = null;
             } else {
                 nom1 = document.getElementById('sel-final-1').value;
                 nom2 = document.getElementById('sel-final-2').value;
                 veto = document.getElementById('sel-veto').value;
                 init1 = document.getElementById('sel-init-1').value;
                 init2 = document.getElementById('sel-init-2').value;
+                if(bbActive) {
+                    init3 = document.getElementById('sel-init-3').value;
+                    bbWin = document.getElementById('sel-bb-winner').value;
+                } else {
+                    init3 = null;
+                    bbWin = null;
+                }
             }
 
             if(nom1 === nom2) { alert("Final Nominees must be different."); return; }
 
-            window.tempWeek = { hoh, nom1, nom2, veto, init1, init2 };
+            window.tempWeek = { hoh, nom1, nom2, veto, bbWin, init1, init2, init3, wasBBActive: bbActive };
 
             if(document.getElementById('chk-jury').checked) isJury = true;
 
@@ -452,7 +507,7 @@
             if(votes1 > votes2) evicted = data.nom1;
             else if(votes2 > votes1) evicted = data.nom2;
             else {
-                let target = prompt(`Tie! ${votes1}-${votes2}. HoH ${data.hoh}, enter name to evict (${data.nom1} or ${data.nom2}):`);
+                let target = prompt(`Damn, it's a tie! ${votes1}-${votes2}. HoH ${data.hoh}, enter exact name to evict (${data.nom1} or ${data.nom2}):`);
                 if(target !== data.nom1 && target !== data.nom2) target = data.nom1; 
                 evicted = target;
                 tieBreakCast = target;
@@ -468,19 +523,26 @@
                 type: 'regular',
                 id: weekCount,
                 hoh: data.hoh,
-                init: [data.init1, data.init2],
+                init: [data.init1, data.init2, data.init3],
                 veto: data.veto,
+                bbWin: data.bbWin,
                 final: [data.nom1, data.nom2],
                 evicted: evicted,
                 tiebreaker: tieBreakCast,
                 votes: voteMap,
                 voteCountStr: `${votes1 + votes2 + (tieBreakCast?1:0)}`,
-                evictVotes: (evicted === data.nom1 ? votes1 : votes2) 
+                evictVotes: (evicted === data.nom1 ? votes1 : votes2),
+                wasBBActive: data.wasBBActive
             };
 
             gameData.push(weekResult);
             renderColumn(weekResult);
             sortRows();
+
+            // Handle ending the Block Buster
+            if(bbActive && document.getElementById('chk-bb-end').checked) {
+                bbActive = false;
+            }
 
             weekCount++;
             setupWeekUI();
@@ -544,7 +606,8 @@
                 winner: winner.name,
                 runner: runner.name,
                 juryVotes: juryVotes,
-                countStr: `${winner.name}<br>${Math.max(v1,v2)} of ${v1+v2} votes to win`
+                winnerVotes: Math.max(v1, v2),
+                runnerVotes: Math.min(v1, v2)
             };
 
             renderColumn(finaleResult);
@@ -557,67 +620,68 @@
 
         // --- Table Rendering ---
 
-        // Helper to format nominees alphabetically on two lines
         function formatNoms(nomsArray) {
             if (!nomsArray || !nomsArray[0]) return '';
-            // Clone and Sort alphabetically
-            const sorted = [...nomsArray].sort();
-            return `${sorted[0]}<br>${sorted[1]}`;
+            // Filter out nulls (handles 2 or 3 noms easily)
+            const validNoms = nomsArray.filter(n => n);
+            const sorted = [...validNoms].sort();
+            return sorted.join('<br>');
         }
 
         function renderColumn(data) {
             const isFinale = data.type === 'finale';
-            // F3 Check: If not finale, but init noms are null
             const isF3 = !isFinale && (data.init[0] === null);
 
-            // 1. Headers
             const headRow = document.getElementById('row-header-weeks');
             headRow.insertAdjacentHTML('beforeend', `<th class="week-header">${isFinale ? 'Finale' : 'Week '+data.id}</th>`);
 
-            // 2. Info Rows
-            // HoH Row
             addCell('row-header-hoh', isFinale ? '' : data.hoh, isFinale ? 'bg-dark-grey' : ''); 
             
-            // Init Noms
             let initTxt = (isFinale || isF3) ? '' : formatNoms(data.init);
             let initClass = (isFinale || isF3) ? 'bg-dark-grey' : '';
             addCell('row-header-noms-init', initTxt, initClass);
 
-            // Veto
             let vetoTxt = (isFinale || isF3) ? '' : data.veto;
             let vetoClass = (isFinale || isF3) ? 'bg-dark-grey' : '';
             addCell('row-header-veto', vetoTxt, vetoClass);
+            
+            // Render BB Winner cell if this is a Blockbuster season
+            if(format === 'blockbuster') {
+                let bbTxt = (isFinale || isF3 || !data.wasBBActive) ? '' : (data.bbWin || '');
+                let bbClass = (isFinale || isF3 || !data.wasBBActive) ? 'bg-dark-grey' : '';
+                addCell('row-header-bb-winner', bbTxt, bbClass);
+            }
 
-            // Final Noms
             let finalTxt = isFinale ? '' : formatNoms(data.final);
             let finalClass = isFinale ? 'bg-dark-grey' : '';
             addCell('row-header-noms-final', finalTxt, finalClass);
 
-            // 3. Player Cells
             players.forEach(p => {
                 const tr = document.getElementById(`row-${p.name.replace(/\s+/g,'')}`);
                 const td = document.createElement('td');
 
                 if (isFinale) {
-                    if(p.name === data.winner) { td.className='bg-winner'; td.innerText='Winner'; }
+                    if(p.name === data.winner) { td.className='bg-winner'; td.innerHTML='<b>Winner</b>'; }
                     else if(p.name === data.runner) { td.className='bg-runnerup'; td.innerText='Runner-Up'; }
                     else if(data.juryVotes[p.name]) { td.className='bg-jury'; td.innerText=data.juryVotes[p.name]; }
                     else {
-                        // Pre-juror
                         handleRedBar(tr, p, weekCount, td); 
                     }
                 } else {
-                    // Regular Week
                     if (p.status === 'active' || (p.evictionWeek === weekCount)) {
-                        // Active or just evicted
                         if(p.name === data.hoh) {
                             td.className = 'bg-hoh';
-                            td.innerText = data.tiebreaker ? data.tiebreaker : "Head of Household";
+                            td.innerHTML = data.tiebreaker ? data.tiebreaker : "<i>Head of<br>Household</i>";
                         } 
                         else if(data.final.includes(p.name)) {
                             td.className = 'bg-nominee';
-                            td.innerText = "Nominated";
+                            td.innerHTML = "<i>Nominated</i>";
                         } 
+                        else if(data.wasBBActive && p.name === data.bbWin) {
+                            // Block Buster winner formatting
+                            td.className = 'bg-blockbuster';
+                            td.innerText = data.votes[p.name] || "";
+                        }
                         else if(data.votes[p.name]) {
                             td.innerText = data.votes[p.name];
                         } 
@@ -625,7 +689,6 @@
                             td.innerText = "";
                         }
                     } else {
-                        // Previously evicted
                         handleRedBar(tr, p, weekCount, td);
                     }
                 }
@@ -635,26 +698,23 @@
                 }
             });
 
-            // 4. Footer
-            const footEvicted = document.getElementById('row-footer-evicted');
-            const footVote = document.getElementById('row-footer-votes');
+            // Footer Logic
+            const footRow1 = document.getElementById('row-footer-row1');
+            const footRow2 = document.getElementById('row-footer-row2');
             
             if(isFinale) {
-                // Finale Footer: Gold for Winner
-                footEvicted.insertAdjacentHTML('beforeend', `<td class="bg-winner">Winner</td>`);
-                footVote.insertAdjacentHTML('beforeend', `<td class="bg-winner">${data.countStr}</td>`);
+                footRow1.insertAdjacentHTML('beforeend', `<td class="bg-winner"><b>${data.winner}</b><br>${data.winnerVotes} votes<br>to win</td>`);
+                footRow2.insertAdjacentHTML('beforeend', `<td class="bg-runnerup"><b>${data.runner}</b><br>${data.runnerVotes} votes<br>to win</td>`);
             } else {
-                // Regular Footer: Red cells
-                footEvicted.insertAdjacentHTML('beforeend', `<td class="bg-evicted-bar">${data.evicted}</td>`);
-                const voteTxt = `${data.evictVotes} of ${data.voteCountStr} votes to evict`;
-                footVote.insertAdjacentHTML('beforeend', `<td class="bg-evicted-bar">${voteTxt}</td>`);
+                const voteTxt = `<b>${data.evicted}</b><br>${data.evictVotes} of ${data.voteCountStr}<br>votes<br>to evict`;
+                footRow1.insertAdjacentHTML('beforeend', `<td class="bg-evicted-bar" rowspan="2">${voteTxt}</td>`);
             }
         }
 
         function addCell(rowId, text, className) {
             const tr = document.getElementById(rowId);
             const td = document.createElement('td');
-            td.innerHTML = text; // InnerHTML used for <br> breaks
+            td.innerHTML = text; 
             if(className) td.className = className;
             tr.appendChild(td);
         }
@@ -664,7 +724,7 @@
 
             if(p.evictionWeek && cWeekVal === p.evictionWeek + 1) {
                 newTd.className = 'bg-evicted-bar';
-                newTd.innerHTML = `Evicted<br>(Week ${p.evictionWeek})`;
+                newTd.innerHTML = `<i>Evicted</i><br>(Week ${p.evictionWeek})`;
             } else if (p.evictionWeek && cWeekVal > p.evictionWeek + 1) {
                 const lastCell = tr.lastElementChild;
                 if(lastCell) {
@@ -695,7 +755,7 @@
             const element = document.getElementById('table-to-print');
             html2canvas(element, {
                 backgroundColor: "#ffffff",
-                scale: 2 // Higher quality
+                scale: 2 
             }).then(canvas => {
                 const link = document.createElement('a');
                 link.download = 'BigBrotherSeason.jpg';
